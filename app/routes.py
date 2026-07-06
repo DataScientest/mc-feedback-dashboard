@@ -718,6 +718,9 @@ def masterclass_detail(masterclass: str):
         df = light_preprocess(_load_processed_df())
         
         days = request.args.get("days", default=30, type=int)
+        negative_only = request.args.get("negative_only", type=int)
+        seuil = {1, 2, 3} if negative_only else {1, 2, 3, 4, 5}
+        
         end_date = datetime.now()
         start_date = end_date - timedelta(days=max(1, days))
 
@@ -745,8 +748,8 @@ def masterclass_detail(masterclass: str):
         payload_mc = df_table_payload(df_mc_animateurs)
 
         df_mc_filter = df[df["Masterclass"] == masterclass]
-        comments_negatifs_df = get_comments(df_mc_filter, seuil=3, longueur_min_avis=3, start_date=start_date, end_date=end_date)
-        comments_negatifs = comments_negatifs_df.to_dict('records') if not comments_negatifs_df.empty else []
+        comments_df = get_comments(df_mc_filter, seuil=seuil, longueur_min_avis=3, start_date=start_date, end_date=end_date)
+        comments = comments_df.to_dict('records') if not comments_df.empty else []
 
         context = {
             "masterclass": masterclass,
@@ -759,7 +762,8 @@ def masterclass_detail(masterclass: str):
             "sessions_30j_table": payload_sessions_30j,
             "mc_table": payload_mc,
             "days": days,
-            "comments_negatifs": comments_negatifs
+            "negative_only": bool(negative_only),
+            "comments": comments
         }
         return render_template("masterclass.html", **context)
 
