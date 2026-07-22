@@ -117,11 +117,39 @@ Paste your environment variables into the editor:
 ```
 SLACK_CHANNEL=your_slack_channel_id
 SLACK_TOKEN=xoxb-your-slack-bot-token
+SECRET_KEY=a-long-random-string
+CREDENTIALS_KEY=see-below
 ```
+
+- `SECRET_KEY`: any long random string (signs the Flask session cookies).
+- `CREDENTIALS_KEY`: Fernet key used to encrypt the stored Nexus credentials at rest. Generate it once with:
+
+  ```bash
+  python3 -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+  ```
+
+  Keep it stable across deployments: if it changes, the stored credentials can no longer be decrypted and someone must log in again. (If omitted, the app generates one and appends it to `.env` on first use.)
+- `ENFORCE_HTTPS=true`: **only when serving HTTPS with a domain** (see Step 5). Do NOT set it in HTTP mode - the app would redirect to a port 443 that answers nothing.
 
 Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X`).
 
-## Step 5: Build and Run
+## Step 5 (optional): HTTPS with a Domain
+
+By default the stack serves plain HTTP through nginx (`deploy/nginx.http.conf`) on port 80 - no domain needed, the address is `http://<ec2-public-ip>`. Let's Encrypt does not issue certificates for bare IPs, so HTTPS requires a domain. When you have one:
+
+1. Point a DNS A record at the instance's (Elastic) IP.
+2. Get the certificate on the host, with port 80 free (`docker compose down` first):
+
+   ```bash
+   sudo apt-get install -y certbot
+   sudo certbot certonly --standalone -d dashboard.example.com
+   ```
+
+3. Replace `dashboard.example.com` with your domain in `deploy/nginx.conf` (3 occurrences).
+4. In `docker-compose.yml`, swap the nginx mounts as indicated by the comments (use `deploy/nginx.conf` + `/etc/letsencrypt`) and uncomment the `443:443` port.
+5. Add `ENFORCE_HTTPS=true` to `.env`, open port 443 in the EC2 Security Group, and `docker compose up -d --build`.
+
+## Step 6: Build and Run
 
 Start the application using Docker Compose. This will build the image and start the container in detached mode.
 
@@ -141,7 +169,7 @@ View logs if needed:
 docker compose logs -f
 ```
 
-## Step 6: Updating the Application
+## Step 7: Updating the Application
 
 To update the bot with the latest code from GitHub:
 
@@ -162,7 +190,8 @@ To update the bot with the latest code from GitHub:
 ## Troubleshooting
 
 - **Permission Denied**: Ensure you added your user to the `docker` group and re-logged in.
-- **Port Issues**: Ensure the Security Group for your EC2 instance allows Inbound traffic on Port 80 (since we mapped port 80 to 5000 in `docker-compose.yml`).
+- **Port Issues**: Ensure the Security Group for your EC2 instance allows Inbound traffic on Ports 80 **and 443** (nginx terminates TLS and proxies to the app on the internal Docker network).
+- **Logs**: application logs are persisted on the host in `logs/app.log`, and an audit trail of sensitive actions (logins, data refreshes, Slack sends) in `logs/audit.log`.
 
 ### "Address already in use" Error
 

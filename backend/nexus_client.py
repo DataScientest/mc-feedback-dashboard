@@ -8,15 +8,33 @@ from datetime import datetime
 URL = "https://api.hub.datascientest.com"
 CREDENTIALS_FILE = "data/credentials.json"
 
+from backend.crypto_utils import encrypt, decrypt, InvalidToken
+
 def save_credentials(email, password):
     os.makedirs(os.path.dirname(CREDENTIALS_FILE), exist_ok=True)
-    with open(CREDENTIALS_FILE, 'w') as f:
-        json.dump({"email": email, "password": password}, f)
+    payload = json.dumps({"email": email, "password": password}).encode("utf-8")
+    with open(CREDENTIALS_FILE, 'wb') as f:
+        f.write(encrypt(payload))
 
 def load_credentials():
-    if os.path.exists(CREDENTIALS_FILE):
-        with open(CREDENTIALS_FILE, 'r') as f:
-            return json.load(f)
+    if not os.path.exists(CREDENTIALS_FILE):
+        return None
+    with open(CREDENTIALS_FILE, 'rb') as f:
+        raw = f.read()
+
+    try:
+        return json.loads(decrypt(raw))
+    except (InvalidToken, ValueError):
+        pass
+
+    # Legacy plaintext file: migrate it to encrypted storage on first read
+    try:
+        creds = json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return None
+    if isinstance(creds, dict) and "email" in creds and "password" in creds:
+        save_credentials(creds["email"], creds["password"])
+        return creds
     return None
 
 def get_auth(username, password):

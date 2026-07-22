@@ -7,7 +7,6 @@
   <aside class="sidebar">
     <div class="sidebar-header">
       <h2>Time Reeval</h2>
-      <span class="user-badge">{{ email }}</span>
     </div>
 
     <!-- Add Source -->
@@ -56,9 +55,6 @@
         <button class="btn btn-danger btn-sm" id="clear-btn" onclick="clearData()">
           Clear All Data
         </button>
-        <a href="{{ url_for('main.logout') }}" class="btn btn-secondary btn-sm" style="text-align:center;">
-          Logout
-        </a>
         <a href="/" class="btn btn-secondary btn-sm" style="text-align:center; color: var(--text-secondary);">
           ← Main Dashboard
         </a>

@@ -25,6 +25,7 @@ from flask import (
 from .nexus_client import fetch_user_lessons, fetch_cohort_users
 from .data_processor import DataPool, extract_modules_from_lessons
 from backend.nexus_client import load_credentials, get_auth
+from backend.audit import audit_log
 
 def _get_global_token():
     creds = load_credentials()
@@ -62,9 +63,7 @@ def index():
 
 @bp.route("/dashboard")
 def dashboard():
-    creds = load_credentials()
-    email = creds["email"] if creds else ""
-    return render_template("reeval/dashboard.html", email=email)
+    return render_template("reeval/dashboard.html")
 
 
 # ── API endpoints ──────────────────────────────────────────────────────
@@ -107,6 +106,7 @@ def add_source():
         "error": None,
     }
 
+    audit_log("reeval_source_added", f"{source_type}:{source_id}")
     thread = threading.Thread(
         target=_background_fetch,
         args=(source_type, source_id, token),
@@ -275,6 +275,7 @@ def get_data():
 @bp.route("/api/clear", methods=["POST"])
 def clear_data():
     """Clear all pooled data."""
+    audit_log("reeval_data_cleared")
     _data_pool.clear()
     return jsonify({"success": True})
 
@@ -309,6 +310,7 @@ def add_samples():
 
     sample_cohorts = [6648, 6078, 6862, 5149, 5127, 6353, 6793, 6932, 7182, 5290, 5056, 6603, 6971, 5316]
 
+    audit_log("reeval_samples_fetch_started")
     thread = threading.Thread(
         target=_background_fetch_samples,
         args=(sample_cohorts, token),

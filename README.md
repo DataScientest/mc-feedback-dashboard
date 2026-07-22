@@ -6,7 +6,8 @@ Application Flask pour suivre la qualité des **masterclasses** et des **animate
 
 ## Fonctionnalités
 
-* **Navbar Bootstrap** avec Login/Logout à droite et lien vers le module de réévaluation
+* **Authentification globale partagée** : une seule connexion Nexus déverrouille l'application pour tous les utilisateurs, de façon permanente
+* **Navbar Bootstrap** avec lien vers le module de réévaluation
 * **Dashboard** :
   * Wall of Fame / Wall of Not Fame
   * Commentaires négatifs formatés, avec liens Meeting & User
@@ -23,10 +24,19 @@ Application Flask pour suivre la qualité des **masterclasses** et des **animate
   * 3 boutons pour envoyer les récap (Top, Not Top, Commentaires négatifs)
 * **Time Reevaluation (Time Reeval)** :
   * Comparaison du temps recommande et reel pour les exercices
-  * Authentification separee via les identifiants Nexus
   * Ajout de sources de donnees par User ID ou Cohort ID
   * Chargement rapide de cohortes echantillons predefinies
   * Graphiques interactifs et table de details triable
+
+---
+
+## Sécurité
+
+* **Identifiants chiffrés au repos** : les identifiants Nexus partagés sont stockés chiffrés (Fernet) dans `data/credentials.json`. La clé vient de la variable d'environnement `CREDENTIALS_KEY` (générée automatiquement et ajoutée au `.env` si absente). Un ancien fichier en clair est migré automatiquement à la première lecture.
+* **Reverse proxy nginx** : seul nginx est exposé publiquement ; l'app Flask n'est joignable que via le réseau interne Docker. Par défaut en HTTP (`deploy/nginx.http.conf`) ; avec un domaine + certificat, passer sur `deploy/nginx.conf` et `ENFORCE_HTTPS=true` pour forcer HTTPS + HSTS (voir DEPLOYMENT.md).
+* **Anti-brute-force** : le formulaire de connexion est limité à 5 tentatives/minute par IP (Flask-Limiter), les POST d'actualisation à 10/minute.
+* **Messages d'erreur génériques** : les détails d'erreurs (traceback, chemins) ne sont plus renvoyés au navigateur ; ils sont écrits dans `logs/app.log`.
+* **Journal d'audit** : `logs/audit.log` trace les actions sensibles (connexions, actualisations de données, envois Slack, actions reeval) avec l'IP cliente — jamais les identifiants.
 
 ---
 

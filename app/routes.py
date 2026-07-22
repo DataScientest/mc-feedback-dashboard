@@ -20,6 +20,18 @@ from datetime import datetime, timedelta
 from flask import jsonify
 from backend.nexus_client import load_credentials, save_credentials, get_auth, refresh_data_from_nexus, refresh_techaway_from_nexus
 from backend.scheduler import job_generate_weekly_report
+from backend.audit import audit_log
+from .extensions import limiter
+import logging
+
+log = logging.getLogger(__name__)
+
+GENERIC_ERROR = "Une erreur interne est survenue. Consultez les logs du serveur."
+
+def _internal_error(context: str):
+    """Log the full traceback server-side, show a generic message to the user."""
+    current_app.logger.exception(context)
+    return GENERIC_ERROR, 500
 
 ALLOWED_EXTENSIONS = {"csv"}
 bp = Blueprint("main", __name__)
@@ -41,33 +53,28 @@ def require_global_auth():
         return redirect(url_for("main.login"))
 
 @bp.route("/login", methods=["GET", "POST"])
+@limiter.limit("5 per minute", methods=["POST"])
 def login():
     if load_credentials():
         return redirect(url_for("main.dashboard"))
-        
+
     if request.method == "POST":
         email = request.form.get("email", "").strip()
         password = request.form.get("password", "")
-        
+
         if not email or not password:
             return render_template("login.html", error="Please enter both email and password.")
-            
+
         token = get_auth(email, password)
         if token:
             save_credentials(email, password)
+            audit_log("login_success")
             return redirect(url_for("main.dashboard"))
         else:
+            audit_log("login_failed")
             return render_template("login.html", error="Authentication failed. Check your Nexus credentials.")
             
     return render_template("login.html")
-
-@bp.route("/logout")
-def logout():
-    import os
-    cred_file = "data/credentials.json"
-    if os.path.exists(cred_file):
-        os.remove(cred_file)
-    return redirect(url_for("main.login"))
 
 
 # File-based state so all Gunicorn worker processes see the same status
@@ -153,11 +160,12 @@ def _run_refresh_in_background():
         else:
             _write_refresh_state("error", "Aucune donnée après le traitement.")
     except Exception as e:
-        msg = str(e)
-        if "credentials" in msg.lower() or "auth" in msg.lower() or "invalid" in msg.lower():
-            _write_refresh_state("credentials_required", msg)
+        log.exception("Background data refresh failed")
+        msg = str(e).lower()
+        if "credentials" in msg or "auth" in msg or "invalid" in msg:
+            _write_refresh_state("credentials_required", "Identifiants requis ou invalides.")
         else:
-            _write_refresh_state("error", msg)
+            _write_refresh_state("error", "Une erreur interne est survenue pendant l'actualisation.")
 
 
 def _run_techaway_refresh_in_background():
@@ -207,14 +215,16 @@ def _run_techaway_refresh_in_background():
         else:
             _write_refresh_state_ta("error", "Aucune donnée après le traitement.")
     except Exception as e:
-        msg = str(e)
-        if "credentials" in msg.lower() or "auth" in msg.lower() or "invalid" in msg.lower():
-            _write_refresh_state_ta("credentials_required", msg)
+        log.exception("Background TechAway refresh failed")
+        msg = str(e).lower()
+        if "credentials" in msg or "auth" in msg or "invalid" in msg:
+            _write_refresh_state_ta("credentials_required", "Identifiants requis ou invalides.")
         else:
-            _write_refresh_state_ta("error", msg)
+            _write_refresh_state_ta("error", "Une erreur interne est survenue pendant l'actualisation.")
 
 
 @bp.route("/refresh_data", methods=["GET", "POST"])
+@limiter.limit("10 per minute", methods=["POST"])
 def refresh_data():
     try:
         state = _read_refresh_state()
@@ -235,15 +245,15 @@ def refresh_data():
             return jsonify({"status": "credentials_required"})
 
         # Write initial state and kick off background thread
+        audit_log("refresh_data_started")
         _write_refresh_state("running", "Démarrage du téléchargement...")
         t = threading.Thread(target=_run_refresh_in_background, daemon=True)
         t.start()
         return jsonify({"status": "running", "message": "Téléchargement des données en cours..."})
 
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"status": "error", "message": f"Erreur serveur: {str(e)}"}), 500
+    except Exception:
+        current_app.logger.exception("refresh_data failed")
+        return jsonify({"status": "error", "message": "Erreur interne du serveur."}), 500
 
 
 @bp.route("/refresh_status", methods=["GET"])
@@ -255,6 +265,7 @@ def refresh_status():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @bp.route("/refresh_techaway", methods=["GET", "POST"])
+@limiter.limit("10 per minute", methods=["POST"])
 def refresh_techaway():
     try:
         state = _read_refresh_state_ta()
@@ -271,15 +282,15 @@ def refresh_techaway():
         if not creds:
             return jsonify({"status": "credentials_required"})
 
+        audit_log("refresh_techaway_started")
         _write_refresh_state_ta("running", "Démarrage du téléchargement...")
         t = threading.Thread(target=_run_techaway_refresh_in_background, daemon=True)
         t.start()
         return jsonify({"status": "running", "message": "Téléchargement des données en cours..."})
 
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"status": "error", "message": f"Erreur serveur: {str(e)}"}), 500
+    except Exception:
+        current_app.logger.exception("refresh_techaway failed")
+        return jsonify({"status": "error", "message": "Erreur interne du serveur."}), 500
 
 @bp.route("/refresh_techaway_status", methods=["GET"])
 def refresh_techaway_status():
@@ -410,6 +421,7 @@ def upload_files():
         with open("data/last_upload.txt", "w") as f:
             f.write(datetime.now().strftime("%d/%m/%Y à %H:%M"))
 
+        audit_log("files_uploaded")
         flash("Fichiers uploadés et traités avec succès.")
         return redirect(url_for("main.dashboard"))
 
@@ -486,10 +498,8 @@ def dashboard():
                 comments_html += "<hr>"
 
         return render_template("dashboard.html", wof=WoF, wos=WoS, comments=comments, comments_html=comments_html)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return f"Erreur : {e}"
+    except Exception:
+        return _internal_error(f"Unhandled error on {request.path}")
 
 
 @bp.route("/animateurs")
@@ -542,8 +552,11 @@ def animateurs():
             animateurs_by_role = {"Autres": sorted(items, key=lambda x: x["name"].lower())}
 
         return render_template("animateurs.html", animateurs_by_role=animateurs_by_role, q=request.args.get("q", ""))
-    except Exception as e:
-        return f"Erreur : {e}"
+    except FileNotFoundError as e:
+        # Message métier volontairement affichable (aucun fichier traité)
+        return str(e), 404
+    except Exception:
+        return _internal_error(f"Unhandled error on {request.path}")
 
 
 
@@ -616,8 +629,11 @@ def animateur_detail(animateur: str):
         }
         return render_template("animateur.html", **context)
 
-    except Exception as e:
-        return f"Erreur : {e}"
+    except FileNotFoundError as e:
+        # Message métier volontairement affichable (aucun fichier traité)
+        return str(e), 404
+    except Exception:
+        return _internal_error(f"Unhandled error on {request.path}")
 
 
 @bp.route("/masterclasses")
@@ -705,8 +721,11 @@ def masterclasses():
             pole_stats=pole_stats,
             pole_colors=pole_colors
         )
-    except Exception as e:
-        return f"Erreur : {e}"
+    except FileNotFoundError as e:
+        # Message métier volontairement affichable (aucun fichier traité)
+        return str(e), 404
+    except Exception:
+        return _internal_error(f"Unhandled error on {request.path}")
 
 
 @bp.route("/masterclass/<path:masterclass>")
@@ -767,8 +786,11 @@ def masterclass_detail(masterclass: str):
         }
         return render_template("masterclass.html", **context)
 
-    except Exception as e:
-        return f"Erreur : {e}"
+    except FileNotFoundError as e:
+        # Message métier volontairement affichable (aucun fichier traité)
+        return str(e), 404
+    except Exception:
+        return _internal_error(f"Unhandled error on {request.path}")
     
     
 # routes.py (extrait)
@@ -851,8 +873,11 @@ def leaderboard():
             roles=roles,
             selected_roles=selected_roles,
         )
-    except Exception as e:
-        return f"Erreur : {e}"
+    except FileNotFoundError as e:
+        # Message métier volontairement affichable (aucun fichier traité)
+        return str(e), 404
+    except Exception:
+        return _internal_error(f"Unhandled error on {request.path}")
 
 
 
@@ -881,9 +906,15 @@ def slack_bot():
             else:
                 message = "Action inconnue."
 
+            if action in ("wof", "wos", "bad"):
+                audit_log("slack_message_sent", action)
+
         return render_template("slack_bot.html", message=message)
-    except Exception as e:
-        return f"Erreur : {e}"
+    except FileNotFoundError as e:
+        # Message métier volontairement affichable (aucun fichier traité)
+        return str(e), 404
+    except Exception:
+        return _internal_error(f"Unhandled error on {request.path}")
 
 
 @bp.route("/techaway")
@@ -1019,10 +1050,8 @@ def techaway():
             tp_meta=tp_meta,
         )
 
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return f"Erreur : {e}"
+    except Exception:
+        return _internal_error(f"Unhandled error on {request.path}")
 
 
 @bp.route("/commentaires", methods=["GET"])
@@ -1068,10 +1097,8 @@ def commentaires():
             days=days,
         )
 
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return f"Erreur : {e}"
+    except Exception:
+        return _internal_error(f"Unhandled error on {request.path}")
 
 
 @bp.route("/set_language/<lang>")

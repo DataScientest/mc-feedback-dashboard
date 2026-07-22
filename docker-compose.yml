@@ -1,8 +1,32 @@
 services:
   slack-bot:
     build: .
-    ports:
-      - "80:5000"
+    # Pas de port publié : seul nginx est exposé, l'app n'est joignable
+    # que via le réseau interne Docker.
+    expose:
+      - "5000"
     env_file:
       - .env
+    volumes:
+      # Persistance des identifiants chiffrés, des données et des logs
+      # à travers les rebuilds du conteneur.
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: always
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+      # Avec un domaine + certificat TLS, ajouter :
+      # - "443:443"
+    volumes:
+      # Mode HTTP (pas de domaine). Avec un domaine + certificat Let's
+      # Encrypt, remplacer par les deux lignes commentées ci-dessous et
+      # mettre ENFORCE_HTTPS=true dans le .env (voir DEPLOYMENT.md).
+      - ./deploy/nginx.http.conf:/etc/nginx/conf.d/default.conf:ro
+      # - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - slack-bot
     restart: always
