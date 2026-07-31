@@ -199,6 +199,7 @@
   "Fondamentaux de Deep learning": "Fondamentaux de Deep learning",
   "Introduction au Deep Learning": "Fondamentaux de Deep learning",
   "Introduction to Deep Learning": "Fondamentaux de Deep learning",
+  "Deep Learning Introduction": "Fondamentaux de Deep learning",
   "Deep Learning Fundamentals": "Fondamentaux de Deep learning",
   "Intro DL": "Fondamentaux de Deep learning",
   "Intro Deep Learning": "Fondamentaux de Deep learning",
@@ -236,8 +237,12 @@
   "Manager une équipe data": "Manager une équipe data",
 
   "Prompt Engineer - Presentation et lancement des projets": "Prompt Engineer - Presentation et lancement des projets",
-  "Prise en main de Copilot, Chat Gpt": "Prise en main de Copilot, Chat Gpt, Dall-E et notebookLM",
-  "Prise en main de chat gpt, Dall-E": "Prise en main de Copilot, Chat Gpt, Dall-E et notebookLM",
+  "Prise en main de Copilot": "Prise en main de Copilot, Chat Gpt, Dall-E et notebookLM",
+  "Getting Started with Copilot": "Prise en main de Copilot, Chat Gpt, Dall-E et notebookLM",
+  "Prise en main de chat gpt": "Prise en main de Copilot, Chat Gpt, Dall-E et notebookLM",
+  "Prise en main de chatgpt": "Prise en main de Copilot, Chat Gpt, Dall-E et notebookLM",
+  "Prise en main chatgpt": "Prise en main de Copilot, Chat Gpt, Dall-E et notebookLM",
+  "Prise en main chat gpt": "Prise en main de Copilot, Chat Gpt, Dall-E et notebookLM",
   "Comprendre et utiliser une API": "Comprendre et utiliser une API",
   "Créer des automatisations sans coder avec Zapier": "Créer des automatisations sans coder avec Zapier",
   "Génération de chatbot": "Génération de chatbot",
@@ -364,6 +369,7 @@
   "Ocerisation": "Ocerisation",
 
   "Questions / Réponses (Les fondamentaux de la Cybersécurité et du SOC)": "Questions / Réponses - Fondamentaux Cybersécurité & SOC",
+  "Analyse de risques": "Analyse de risques",
   "Introduction Wireshark": "Introduction Wireshark",
   "Introduction aux solution cloud et plateformes pour le MLOPS": "Introduction aux solutions cloud & plateformes MLOps",
   "DNS et introduction au conteneur avec LXC": "DNS & introduction conteneur LXC",
@@ -372,7 +378,8 @@
   "Face identification": "Face identification",
   "Investigation avec Splunk": "Investigation avec Splunk",
   "Bash & Linux, Python & FastAPI": "Bash & Linux, Python & FastAPI",
-  "SEO, Paid Media et Inbound Marketing": "SEO, Paid Media et Inbound Marketing",
+  "SEO, Paid Media": "SEO, Paid Media et Inbound Marketing",
+  "Tracking & GTM": "Tracking & GTM, Introduction to HTML/CSS",
 
   "Intro GRC et autres référentiels": "Intro GRC et autres référentiels",
   "DevOps dans le cloud": "DevOps dans le cloud",
@@ -416,6 +423,9 @@
   "Accompagnement au changement et communication": "Accompagnement au changement et communication",
 
   " SRE": "SRE",
+
+  "Masterclass OCR": "Masterclass OCR",
+  "Computer Vision": "Computer Vision",
   
   "TECHFORALL-N0 - TP 1": "TECHFORALL-N0 - TP 1",
   "TECHFORALL-N0 - TP 2": "TECHFORALL-N0 - TP 2",

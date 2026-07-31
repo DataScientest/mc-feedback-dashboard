@@ -3,9 +3,14 @@
 
 import pandas as pd
 import json
+import logging
+import re
+import unicodedata
 from pathlib import Path
 from datetime import datetime, timedelta
 
+
+log = logging.getLogger(__name__)
 
 MAPPING_DIR = Path(__file__).parent / "mapping"
 
@@ -20,22 +25,96 @@ with open(MAPPING_DIR / "pole_mapping.json", "r", encoding="utf-8") as f:
     pole_mapping = json.load(f)
 
 
+# Caractères typographiques ramenés à leur équivalent ASCII avant comparaison
+_QUOTE_TRANS = dict.fromkeys(map(ord, "‘’‚‛ʼ´`"), "'")
+_DASH_TRANS = dict.fromkeys(map(ord, "‐‑‒–—―−"), "-")
+
+
+# Normalise un intitulé pour une comparaison souple (accents, casse, ponctuation)
+def normalize_mc_text(text):
+    """
+    In : "Réduction de Dimension & Séries Temporelles"
+    Out: "reduction de dimension et series temporelles"
+
+    Neutralise : accents, casse, apostrophes/tirets typographiques, tirets
+    répétés, "&"/"and" vs "et", espaces multiples.
+    Les espaces internes sont conservés : "Data Viz" et "DataViz" restent
+    deux intitulés distincts.
+    """
+    if not isinstance(text, str):
+        return ""
+
+    text = text.translate(_QUOTE_TRANS).translate(_DASH_TRANS)
+    # Décomposition Unicode puis suppression des diacritiques (é -> e, ç -> c)
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    text = text.lower()
+    text = re.sub(r"-{2,}", "-", text)
+    text = text.replace("&", " et ")
+    text = re.sub(r"\band\b", "et", text)
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+# Index de recherche construit une fois au chargement du mapping
+def _build_meeting_index(mapping):
+    """
+    Retourne (index, conflits) où index est une liste [(clé normalisée, valeur)]
+    triée par longueur décroissante : l'intitulé le plus précis gagne
+    ("Cloud Computing avec AWS" plutôt que "Cloud Computing").
+    À longueur égale, l'ordre du JSON départage.
+
+    conflits recense les clés qui deviennent identiques après normalisation
+    mais qui pointent vers des masterclass différentes.
+    """
+    index = {}
+    conflicts = {}
+
+    for key, value in mapping.items():
+        nkey = normalize_mc_text(key)
+        if not nkey:
+            continue
+        if nkey in index:
+            if index[nkey] != value:
+                conflicts.setdefault(nkey, {index[nkey]}).add(value)
+            continue
+        index[nkey] = value
+
+    # sorted() est stable : à longueur égale l'ordre d'insertion est préservé
+    ordered = sorted(index.items(), key=lambda kv: len(kv[0]), reverse=True)
+    return ordered, conflicts
+
+
+meeting_index, meeting_mapping_conflicts = _build_meeting_index(meeting_mapping)
+
+for _nkey, _values in meeting_mapping_conflicts.items():
+    log.warning(
+        "meeting_mapping : '%s' correspond à plusieurs masterclass %s "
+        "après normalisation, la première du JSON est retenue.",
+        _nkey, sorted(_values),
+    )
+
+
 # Fonction pour nettoyer les noms de masterclass avec dictionnaire JSON
 def get_mc_name(meeting_name):
+    if not isinstance(meeting_name, str):
+        return meeting_name
+
     # If "-OPT1" appears in the meeting name, remove it
     if "-OPT1" in meeting_name:
         meeting_name = meeting_name.replace("-OPT1", "")
     elif "-OPT2" in meeting_name:
         meeting_name = meeting_name.replace("-OPT2", "")
-   
+
     options = ["AI", "CYBERSECURITY", "TECHFORALL", "DATAANALYSIS", "NOCODE", "PROGRAMING", "PROGRAMMING"]
     # Replace TECHAWAY-option-L by TECHAWAY-option-N
     for option in options:
         if f"TECHAWAY-{option}-L" in meeting_name:
             meeting_name = meeting_name.replace(f"TECHAWAY-{option}-L", f"TECHAWAY-{option}-N")
 
-    for key, value in meeting_mapping.items():
-        if key.lower() in meeting_name.lower():
+    normalized = normalize_mc_text(meeting_name)
+    for nkey, value in meeting_index:
+        if nkey in normalized:
             return value
     return meeting_name
 

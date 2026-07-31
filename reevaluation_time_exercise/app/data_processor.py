@@ -50,18 +50,22 @@ class ModuleInfo:
 
     @property
     def deviation(self) -> float | None:
-        """Absolute deviation in minutes (actual − recommended)."""
-        if self.avg_actual is None or self.recommended_minutes == 0:
+        """Absolute deviation in minutes (median actual − recommended).
+
+        The median is used rather than the mean: a handful of learners who
+        leave a module open for hours would otherwise drag the reference up.
+        """
+        if self.median_actual is None or self.recommended_minutes == 0:
             return None
-        return round(self.avg_actual - self.recommended_minutes, 1)
+        return round(self.median_actual - self.recommended_minutes, 1)
 
     @property
     def deviation_pct(self) -> float | None:
-        """Percentage deviation from recommended."""
-        if self.avg_actual is None or self.recommended_minutes == 0:
+        """Percentage deviation from recommended, based on the median."""
+        if self.median_actual is None or self.recommended_minutes == 0:
             return None
         return round(
-            ((self.avg_actual - self.recommended_minutes) / self.recommended_minutes) * 100,
+            ((self.median_actual - self.recommended_minutes) / self.recommended_minutes) * 100,
             1,
         )
 

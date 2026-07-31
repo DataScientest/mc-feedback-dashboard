@@ -197,22 +197,39 @@ def get_worst_mc_animateur(df, animateur):
     return df_mc.iloc[-1]
 
 
+# Met en forme une note pour l'affichage (5.0 -> 5, 4.5 -> 4.5)
+def _format_note(note):
+    note = float(note)
+    return int(note) if note.is_integer() else round(note, 1)
+
+
 # Retourne les sessions d'un animateur dans les 30 derniers jours
 def get_sessions_30j_animateur(df, animateur):
+    cols = ['Meeting Start Date', 'Masterclass', 'Note_Moyenne', 'Nb_Notes', 'Notes', 'Meeting ID']
+
     df_30j = filter_by_date_range(df, start_date=datetime.now() - timedelta(days=30))
     df_30j = df_30j[df_30j["Meeting Animator"] == animateur]
 
+    if df_30j.empty:
+        return pd.DataFrame(columns=cols)
+
     df_sessions = (
         df_30j
-        .groupby(['Masterclass', 'Meeting Start Date'])
-        .agg(Note_Moyenne=('Animator Grade', 'mean'))
-        .reset_index()
+        .groupby(['Masterclass', 'Meeting Start Date', 'Meeting ID'], as_index=False)
+        .agg(
+            Note_Moyenne=('Animator Grade', 'mean'),
+            Nb_Notes=('Animator Grade', 'count'),
+            # Toutes les notes de la session, y compris celles laissées sans commentaire
+            Notes=('Animator Grade', lambda s: [
+                _format_note(n) for n in sorted(s.dropna().tolist(), reverse=True)
+            ]),
+        )
     )
     df_sessions['Note_Moyenne'] = df_sessions['Note_Moyenne'].round(2)
     df_final = df_sessions.sort_values(by='Meeting Start Date', ascending=False).reset_index(drop=True)
     df_final['Meeting Start Date'] = df_final['Meeting Start Date'].apply(format_date)
-    
-    return df_final
+
+    return df_final[cols]
 
 
 # Retourne les avis d'un animteur sur les 30 derniers jours

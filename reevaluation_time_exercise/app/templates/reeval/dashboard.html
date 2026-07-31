@@ -90,7 +90,7 @@
 
     <!-- Chart -->
     <div class="chart-section" id="chart-section" style="display:none;">
-      <h2>Recommended vs. Actual Time (minutes)</h2>
+      <h2>Recommended vs. Median Actual Time (minutes)</h2>
       <div class="chart-legend">
         <div class="legend-item">
           <div class="legend-swatch recommended"></div>
@@ -122,9 +122,9 @@
           <tr>
             <th data-sort="module_name">Module</th>
             <th data-sort="recommended_minutes">Recommended (min)</th>
+            <th data-sort="median_actual">Median Actual (min)</th>
             <th data-sort="avg_actual">Avg Actual (min)</th>
-            <th data-sort="median_actual">Median (min)</th>
-            <th data-sort="deviation_pct">Deviation %</th>
+            <th data-sort="deviation_pct" title="Median actual vs. recommended">Deviation %</th>
             <th data-sort="user_count">Users</th>
             <th>Exercises</th>
             <th></th>
@@ -351,12 +351,12 @@
 
     // Find max value for scaling
     const maxVal = Math.max(
-      ...modules.map(m => Math.max(m.recommended_minutes, m.avg_actual || 0))
+      ...modules.map(m => Math.max(m.recommended_minutes, m.median_actual || 0))
     );
 
     chart.innerHTML = modules.map(m => {
       const recPct = maxVal > 0 ? (m.recommended_minutes / maxVal * 100) : 0;
-      const actPct = maxVal > 0 && m.avg_actual ? (m.avg_actual / maxVal * 100) : 0;
+      const actPct = maxVal > 0 && m.median_actual ? (m.median_actual / maxVal * 100) : 0;
 
       const devPct = m.deviation_pct || 0;
       let barClass, devClass;
@@ -386,8 +386,8 @@
           <div class="bar-actual ${barClass}" style="width: ${actPct}%"></div>
           <div class="bar-tooltip">
             <div class="tt-row"><span class="tt-label">Recommended:</span> <span class="tt-value">${m.recommended_minutes} min</span></div>
+            <div class="tt-row"><span class="tt-label">Median Actual:</span> <span class="tt-value">${m.median_actual ?? 'N/A'} min</span></div>
             <div class="tt-row"><span class="tt-label">Avg Actual:</span> <span class="tt-value">${m.avg_actual ?? 'N/A'} min</span></div>
-            <div class="tt-row"><span class="tt-label">Median:</span> <span class="tt-value">${m.median_actual ?? 'N/A'} min</span></div>
             <div class="tt-row"><span class="tt-label">Min / Max:</span> <span class="tt-value">${m.min_actual ?? 'N/A'} / ${m.max_actual ?? 'N/A'} min</span></div>
             <div class="tt-row"><span class="tt-label">Users:</span> <span class="tt-value">${m.user_count}</span></div>
           </div>
@@ -445,8 +445,8 @@
       <tr>
         <td>${m.module_name}</td>
         <td>${m.recommended_minutes}</td>
-        <td>${m.avg_actual ?? 'N/A'}</td>
         <td>${m.median_actual ?? 'N/A'}</td>
+        <td>${m.avg_actual ?? 'N/A'}</td>
         <td class="${sevClass}">${devSign}${devPct}%</td>
         <td>${m.user_count}</td>
         <td>
