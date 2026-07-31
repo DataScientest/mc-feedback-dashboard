@@ -1,3 +1,39 @@
+/* === Mise en page commune à toutes les pages === */
+
+/* En-tête de page : même respiration et même séparation partout */
+.page-header {
+    padding-bottom: .75rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+/* Les cartes dépliables (details) doivent réagir comme des boutons */
+details.card > summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+details.card > summary::-webkit-details-marker {
+    display: none;
+}
+
+details.card > summary:hover {
+    background-color: #f8fafc;
+}
+
+/* Les avis affichés dans une carte n'ont pas besoin d'une double bordure */
+.card-body > .list-group > .list-group-item {
+    border-left: 0;
+    border-right: 0;
+}
+
+.card-body > .list-group > .list-group-item:first-child {
+    border-top: 0;
+}
+
+.card-body > .list-group > .list-group-item:last-child {
+    border-bottom: 0;
+}
+
 /* === TechAway Page === */
 .hero-techaway {
     width: 100%;

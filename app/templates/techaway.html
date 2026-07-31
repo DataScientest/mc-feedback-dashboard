@@ -1,15 +1,18 @@
 <!-- app/templates/techaway.html - un seul bloc niveau TECHFORALL (N0) + TP -->
 {% extends "base.html" %}
-{% block content %}
+{% import "_macros.html" as ui %}
+{% block title %}TechAway | Dashboard Masterclass{% endblock %}
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h2>TechAway</h2>
-  <button class="btn btn-primary btn-sm" onclick="initRefreshTechawayData()" id="btnRefreshTechawayData">
+{% block content %}
+{{ ui.breadcrumb([{'label': 'TechAway'}]) }}
+
+{% call ui.page_header('TechAway', 'Satisfaction par verticale, niveau et TP.') %}
+  <button class="btn btn-primary" onclick="initRefreshTechawayData()" id="btnRefreshTechawayData">
     <span id="refreshTechawaySpinner" class="spinner-border spinner-border-sm d-none" role="status"
       aria-hidden="true"></span>
     <span id="refreshTechawayText">Télécharger les données TechAway</span>
   </button>
-</div>
+{% endcall %}
 
 <div class="alert alert-warning" role="alert">
   <strong>Attention :</strong> pensez à bien uploader les bons fichiers pour pouvoir afficher correctement cette page
@@ -83,10 +86,6 @@
   </div>
   {% endfor %}
 </div>
-
-<p class="mt-4">
-  <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">← Retour au dashboard</a>
-</p>
 
 <!-- Credentials Modal for TechAway -->
 <div class="modal fade" id="credentialsTechawayModal" tabindex="-1" aria-labelledby="credentialsTechawayModalLabel"

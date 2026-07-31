@@ -1,154 +1,50 @@
 {% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}{{ masterclass }} | Dashboard Masterclass{% endblock %}
+
 {% block content %}
-<h2 class="mb-4">Détail de la masterclass : {{ masterclass }}</h2>
+{{ ui.breadcrumb([
+  {'label': 'Masterclasses', 'url': url_for('main.masterclasses')},
+  {'label': masterclass},
+]) }}
+{{ ui.page_header(masterclass, 'Détail des sessions et des avis reçus.') }}
 
-<!-- Formulaire pour choisir la période temporelle pour les commentaires -->
-<form method="get" class="row g-3 align-items-center mb-4">
-  <div class="col-auto">
-    <label for="days" class="col-form-label fw-bold">Période (jours) :</label>
-  </div>
-  <div class="col-auto">
-    <input type="number" id="days" name="days" class="form-control" value="{{ days }}" min="1">
-  </div>
-  <div class="col-auto">
-    <div class="form-check pt-2 ms-3">
-      <input class="form-check-input" type="checkbox" id="negative_only" name="negative_only" value="1" {% if negative_only %}checked{% endif %} onchange="this.form.submit()">
-      <label class="form-check-label" for="negative_only">
-        Négatifs uniquement (≤ 3/5)
-      </label>
-    </div>
-  </div>
-  <div class="col-auto">
-    <button type="submit" class="btn btn-primary d-none">Filtrer</button>
-  </div>
-</form>
+{% include "_period_filter.html" %}
 
-<div class="row g-4">
+<div class="row g-4 mb-4">
   <section class="col-md-6">
-    <div class="card h-100">
-      <div class="card-header">
-        <h3 class="h6 m-0">Statistiques générales</h3>
-      </div>
-      <div class="card-body">
-        <ul class="list-unstyled mb-0">
-          <li><strong>Sessions totales :</strong> {{ sessions_total }}</li>
-          <li><strong>Moyenne (contenu) :</strong> {{ moyenne_generale }}</li>
-          <li><strong>Classement :</strong> {{ classement }}</li>
-        </ul>
-      </div>
-    </div>
+    {{ ui.stat_card('Statistiques générales', [
+      ('Sessions totales', sessions_total),
+      ('Moyenne (contenu)', moyenne_generale),
+      ('Classement', classement),
+    ]) }}
   </section>
 
   <section class="col-md-6">
-    <div class="card h-100">
-      <div class="card-header">
-        <h3 class="h6 m-0">Derniers 30 jours</h3>
-      </div>
-      <div class="card-body">
-        <ul class="list-unstyled">
-          <li><strong>Sessions :</strong> {{ sessions_30j }}</li>
-          <li><strong>Moyenne (contenu) :</strong>
-            {% if moyenne_30j is not none %} {{ moyenne_30j }} {% else %} Aucune donnée {% endif %}
-          </li>
-          <li><strong>Classement :</strong> {{ classement_30j }}</li>
-        </ul>
-
-        <h4 class="h6 mt-3">Détail des sessions</h4>
-        {% if sessions_30j_table.rows %}
-          <div class="table-responsive">
-            <table class="table table-sm table-striped table-hover">
-              <thead class="table-light">
-                <tr>
-                  {% for c in sessions_30j_table.columns %}
-                    <th>{{ c }}</th>
-                  {% endfor %}
-                </tr>
-              </thead>
-              <tbody>
-                {% for r in sessions_30j_table.rows %}
-                  <tr>
-                    {% for c in sessions_30j_table.columns %}
-                      <td>{{ r[c] }}</td>
-                    {% endfor %}
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <div class="alert alert-info mb-0">Aucune session sur les 30 derniers jours.</div>
-        {% endif %}
-      </div>
-    </div>
+    {{ ui.stat_card('Derniers 30 jours', [
+      ('Sessions', sessions_30j),
+      ('Moyenne (contenu)', moyenne_30j),
+      ('Classement', classement_30j),
+    ]) }}
   </section>
 </div>
 
-<hr class="my-4">
+{{ ui.section_title('Animateurs de cette masterclass', '30 derniers jours') }}
+<div class="mb-4">
+  {{ ui.data_table(sessions_30j_table, 'Aucune session sur les 30 derniers jours.',
+                   linkify='animateur', link_col='Meeting Animator', badge_col='Moyenne') }}
+</div>
 
-<h3 class="mb-3">
-  {% if negative_only %}
-    Avis négatifs ({{ days }} derniers jours)
-  {% else %}
-    Avis ({{ days }} derniers jours)
-  {% endif %}
-</h3>
-{% if comments %}
-  <div class="list-group mb-4">
-    {% for c in comments %}
-    <div class="list-group-item">
-      <div class="d-flex w-100 justify-content-between align-items-center">
-        <h5 class="mb-1 fw-bold">{{ c['Meeting Animator'] }} <span class="badge {% if c['Content Grade'] <= 2 %}bg-danger{% elif c['Content Grade'] == 3 %}bg-warning text-dark{% else %}bg-success{% endif %} ms-2">{{ c['Content Grade'] }}/5</span></h5>
-        <small class="text-muted">{{ c['Meeting Start Date'] | string | truncate(10, True, '') if c['Meeting Start Date'] else '' }}</small>
-      </div>
-      <p class="mb-2 mt-2 fst-italic">"{{ c['Comment'] }}"</p>
-      <small class="text-secondary">
-        Écrit par <a href="https://nexus.datascientest.com/user/{{ c['User ID'] }}" target="_blank" class="text-decoration-none">{{ c['User Fullname'] }}</a>
-        - <a href="https://nexus.datascientest.com/meeting/{{ c['Meeting ID'] }}" target="_blank" class="text-decoration-none">Lien vers la session (Nexus)</a>
-      </small>
-    </div>
-    {% endfor %}
-  </div>
-{% else %}
-  {% if negative_only %}
-    <div class="alert alert-success mb-4">Aucun commentaire négatif (note &le; 3) sur cette période. Bravo !</div>
-  {% else %}
-    <div class="alert alert-success mb-4">Aucun commentaire sur cette période.</div>
-  {% endif %}
-{% endif %}
+{{ ui.section_title(
+  'Avis négatifs' if negative_only else 'Avis',
+  '%d derniers jours' | format(days)) }}
+<div class="mb-4">
+  {{ ui.comment_list(comments, 'Meeting Animator',
+                     empty_message='Aucun commentaire négatif sur cette période.' if negative_only
+                                   else 'Aucun commentaire sur cette période.') }}
+</div>
 
-<hr class="my-4">
-
-<h3 class="mb-3">Animateurs de cette MC</h3>
-{% if mc_table.rows %}
-  <div class="card">
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-sm table-striped table-hover mb-0">
-          <thead class="table-light">
-            <tr>
-              {% for c in mc_table.columns %}
-                <th>{{ c }}</th>
-              {% endfor %}
-            </tr>
-          </thead>
-          <tbody>
-            {% for r in mc_table.rows %}
-              <tr>
-                {% for c in mc_table.columns %}
-                  <td>{{ r[c] }}</td>
-                {% endfor %}
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-{% else %}
-  <div class="alert alert-warning">Aucun animateur pour cette MC.</div>
-{% endif %}
-
-<p class="mt-4">
-  <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">← Retour au dashboard</a>
-</p>
+{{ ui.section_title('Animateurs de cette masterclass', 'Historique complet') }}
+{{ ui.data_table(mc_table, 'Aucun animateur pour cette masterclass.',
+                 linkify='animateur', link_col='Meeting Animator', badge_col='Moyenne') }}
 {% endblock %}

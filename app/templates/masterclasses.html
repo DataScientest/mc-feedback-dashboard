@@ -1,68 +1,60 @@
 {% extends "base.html" %}
-{% block content %}
+{% import "_macros.html" as ui %}
+{% block title %}Masterclasses | Dashboard Masterclass{% endblock %}
 
-<h2 class="mb-4">👨‍🏫 Masterclasses</h2>
+{% block content %}
+{{ ui.breadcrumb([{'label': 'Masterclasses'}]) }}
+{{ ui.page_header('Masterclasses', 'Satisfaction moyenne par pôle et par masterclass.') }}
 
 {% if masterclasses_by_pole or other_masterclasses %}
 
-{% if masterclasses_by_pole %}
-  <div class="mb-4">
-    <h3 class="h6 mb-3">MC par pôle et satisfaction</h3>
+  {% if masterclasses_by_pole %}
+    {{ ui.section_title('Par pôle') }}
     {% for pole, items in masterclasses_by_pole.items() %}
-      <details class="mb-3 border rounded" {% if loop.first %}open{% endif %}>
-        <summary class="py-2 px-3 d-flex justify-content-between align-items-center" style="cursor: pointer;">
-          <h4 class="h6 m-0 text-dark" style="display: inline;">{{ pole }}
+      <details class="card mb-3" {% if loop.first %}open{% endif %}>
+        <summary class="card-header d-flex justify-content-between align-items-center" style="cursor: pointer;">
+          <span class="h6 m-0">
+            {{ pole }}
             {% if pole_stats.get(pole, 0) > 0 %}
-              <span class="badge border ms-2" style="{{ pole_colors.get(pole, 'background-color: #6c757d; color: white;') }}">{{ "%.2f"|format(pole_stats[pole]) }}/5</span>
+              <span class="badge border ms-2"
+                    style="{{ pole_colors.get(pole, 'background-color: #6c757d; color: white;') }}">{{ "%.2f" | format(pole_stats[pole]) }}/5</span>
             {% endif %}
-          </h4>
-          <span class="badge bg-secondary rounded-pill">{{ items|length }}</span>
+          </span>
+          <span class="badge bg-secondary rounded-pill">{{ items | length }}</span>
         </summary>
         <ul class="list-group list-group-flush">
           {% for item in items %}
-          <li class="list-group-item d-flex justify-content-between align-items-center">
-            <div>
+            <li class="list-group-item d-flex justify-content-between align-items-center">
               <a href="{{ url_for('main.masterclass_detail', masterclass=item.name) }}"
-                class="text-decoration-none fw-bold">{{ item.name }}</a>
-            </div>
-            <span class="badge bg-primary rounded-pill">{{ item.avg }}/5</span>
-          </li>
+                 class="text-decoration-none fw-semibold">{{ item.name }}</a>
+              {{ ui.grade_badge(item.avg) }}
+            </li>
           {% endfor %}
         </ul>
       </details>
     {% endfor %}
-  </div>
-{% endif %}
+  {% endif %}
 
-{% if other_masterclasses %}
-<div class="card">
-  <div class="card-header">
-    <h3 class="h6 m-0">📂 Autres (Non mappées / Anciennes)</h3>
-  </div>
-  <div class="card-body">
-    <details>
-      <summary class="cursor-pointer text-primary">Voir les {{ other_masterclasses|length }} autres masterclasses
+  {% if other_masterclasses %}
+    {{ ui.section_title('Autres', 'Masterclasses non mappées ou anciennes') }}
+    <details class="card mb-3">
+      <summary class="card-header d-flex justify-content-between align-items-center" style="cursor: pointer;">
+        <span class="h6 m-0">Voir les autres masterclasses</span>
+        <span class="badge bg-secondary rounded-pill">{{ other_masterclasses | length }}</span>
       </summary>
-      <ul class="list-group list-group-flush mt-3">
+      <ul class="list-group list-group-flush">
         {% for item in other_masterclasses %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          <a href="{{ url_for('main.masterclass_detail', masterclass=item.name) }}"
-            class="text-decoration-none text-muted">{{ item.name }}</a>
-          <span class="badge bg-secondary rounded-pill">{{ item.avg }}/5</span>
-        </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <a href="{{ url_for('main.masterclass_detail', masterclass=item.name) }}"
+               class="text-decoration-none text-muted">{{ item.name }}</a>
+            {{ ui.grade_badge(item.avg) }}
+          </li>
         {% endfor %}
       </ul>
     </details>
-  </div>
-</div>
-{% endif %}
+  {% endif %}
 
 {% else %}
-<div class="alert alert-info">Aucune masterclass trouvée.</div>
+  {{ ui.empty_state('Aucune masterclass trouvée.') }}
 {% endif %}
-
-<p class="mt-4">
-  <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">← Retour au dashboard</a>
-</p>
-
 {% endblock %}

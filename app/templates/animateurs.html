@@ -1,51 +1,49 @@
 {% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}Animateurs | Dashboard Masterclass{% endblock %}
+
 {% block content %}
+{{ ui.breadcrumb([{'label': 'Animateurs'}]) }}
+{{ ui.page_header('Animateurs', 'Tous les animateurs, groupés par rôle.') }}
 
-<h2 class="mb-4">🎤 Animateurs</h2>
-
-<form method="get" class="row g-2 mb-4" role="search">
-  <div class="col-sm-8 col-md-6">
-    <input type="search" class="form-control" name="q" placeholder="Rechercher un animateur..."
-           value="{{ q or '' }}" aria-label="Rechercher un animateur">
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-2 align-items-center" role="search">
+      <div class="col-sm-8 col-md-6">
+        <input type="search" class="form-control" name="q" placeholder="Rechercher un animateur"
+               value="{{ q or '' }}" aria-label="Rechercher un animateur">
+      </div>
+      <div class="col-sm-auto d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Rechercher</button>
+        {% if q %}
+          <a href="{{ url_for('main.animateurs') }}" class="btn btn-outline-secondary">Effacer</a>
+        {% endif %}
+      </div>
+    </form>
   </div>
-  <div class="col-sm-auto">
-    <button type="submit" class="btn btn-primary">Rechercher</button>
-    {% if q %}
-      <a href="{{ url_for('main.animateurs') }}" class="btn btn-outline-secondary">Effacer</a>
-    {% endif %}
-  </div>
-</form>
+</div>
 
 {% if animateurs_by_role %}
-  <div class="mb-4">
-    {% for role, names in animateurs_by_role.items() %}
-      <details class="mb-3 border rounded" {% if q %}open{% endif %}>
-        <summary class="py-2 px-3 d-flex justify-content-between align-items-center">
-          <span>{{ role }}</span>
-          <span class="badge bg-secondary">{{ names|length }}</span>
-        </summary>
-        <ul class="list-group list-group-flush">
-          {% for a in names %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-              <div>
-                <a href="{{ url_for('main.animateur_detail', animateur=a.name) }}" class="text-decoration-none {% if not a.active %}text-muted{% else %}fw-bold{% endif %}">{{ a.name }}</a>
-                {% if not a.active %}
-                  <span class="badge bg-warning text-dark ms-2">Inactif</span>
-                {% endif %}
-              </div>
-              <a href="{{ url_for('main.animateur_detail', animateur=a.name) }}" class="btn btn-sm btn-outline-primary">Voir</a>
-            </li>
-          {% endfor %}
-        </ul>
-      </details>
-    {% endfor %}
-  </div>
+  {% for role, names in animateurs_by_role.items() %}
+    <details class="card mb-3" {% if q or loop.first %}open{% endif %}>
+      <summary class="card-header d-flex justify-content-between align-items-center" style="cursor: pointer;">
+        <span class="h6 m-0">{{ role }}</span>
+        <span class="badge bg-secondary rounded-pill">{{ names | length }}</span>
+      </summary>
+      <ul class="list-group list-group-flush">
+        {% for a in names %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <a href="{{ url_for('main.animateur_detail', animateur=a.name) }}"
+               class="text-decoration-none {{ 'fw-bold' if a.active else 'text-muted' }}">{{ a.name }}</a>
+            {% if not a.active %}
+              <span class="badge bg-warning text-dark">Inactif sur 30 jours</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </details>
+  {% endfor %}
 {% else %}
-  <div class="alert alert-info">Aucun animateur trouvé{% if q %} pour « {{ q }} »{% endif %}.</div>
+  {{ ui.empty_state('Aucun animateur trouvé' ~ (' pour « %s »' | format(q) if q else '') ~ '.') }}
 {% endif %}
-
-<p class="mt-4">
-  <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">← Retour au dashboard</a>
-</p>
-
 {% endblock %}

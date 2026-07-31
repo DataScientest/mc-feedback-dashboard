@@ -1,112 +1,67 @@
-<!-- app/templates/commentaires.html -->
 {% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}Commentaires | Dashboard Masterclass{% endblock %}
+
 {% block content %}
+{{ ui.breadcrumb([{'label': 'Commentaires'}]) }}
+{{ ui.page_header('Commentaires des masterclasses',
+                  'Tous les avis écrits, filtrables par note, longueur et période.') }}
 
-<h2 class="mb-4">📝 Commentaires des masterclasses</h2>
-
-<form method="get" class="row g-3 mb-4">
-  <!-- Multi-choix des notes -->
-  <div class="col-md-5">
-    <label class="form-label d-block">Filtrer par note sur le contenu</label>
-    <div class="d-flex flex-wrap gap-3 mt-2">
-      {% for g in [1,2,3,4,5] %}
-      <div class="form-check form-check-inline m-0">
-        <input class="form-check-input" type="checkbox" name="grades" id="grade_{{ g }}" value="{{ g }}" {% if g in
-          selected_grades %}checked{% endif %}>
-        <label class="form-check-label" for="grade_{{ g }}">{{ g }} ★</label>
-      </div>
-      {% endfor %}
-    </div>
-    <div class="form-text mt-2">Par défaut : 1, 2, 3.</div>
-  </div>
-
-  <!-- Slider longueur minimale -->
-  <div class="col-md-4">
-    <label for="min_words" class="form-label">Nombre minimum de mots</label>
-    <div class="d-flex align-items-center gap-2">
-      <input type="range" id="min_words" name="min_words" class="form-range" min="1" max="100" step="1"
-        value="{{ min_words }}">
-      <span id="minWordsBadge" class="badge text-bg-secondary">{{ min_words }}</span>
-    </div>
-  </div>
-
-  <!-- Slider période (en jours) -->
-  <div class="col-md-4">
-    <label for="days" class="form-label">Période étudiée (jours)</label>
-    <div class="d-flex align-items-center gap-2">
-      <input type="range" id="days" name="days" class="form-range" min="1" max="180" step="1" value="{{ days }}">
-      <span id="daysBadge" class="badge text-bg-secondary">{{ days }}</span>
-    </div>
-  </div>
-
-  <div class="col-12">
-    <button type="submit" class="btn btn-primary">Appliquer les filtres</button>
-    <a href="{{ url_for('main.commentaires') }}" class="btn btn-outline-secondary">Réinitialiser</a>
-  </div>
-</form>
-
-{% set rows = comments_df.to_dict(orient='records') if comments_df is not none else [] %}
-{% if rows and rows|length > 0 %}
-<div class="card">
-  <ul class="list-group list-group-flush">
-    {% for r in rows %}
-    {% set meeting_link = 'https://nexus.datascientest.com/meeting/' ~ (r['Meeting ID'] or '') %}
-    {% set user_link = 'https://nexus.datascientest.com/user/' ~ (r['User ID'] or '') %}
-    <li class="list-group-item">
-      <div class="d-flex justify-content-between align-items-start">
-        <div>
-          <strong>{{ r['Masterclass'] }}</strong><br>
-          <small class="text-muted">
-            {% if r['Meeting Start Date'] %}
-            <a href="{{ meeting_link }}" target="_blank" rel="noopener">
-              {{ r['Meeting Start Date'].date() }}
-            </a>
-            {% else %}
-            -
-            {% endif %}
-            ·
-            {% if r['User Fullname'] %}
-            <a href="{{ user_link }}" target="_blank" rel="noopener">
-              {{ r['User Fullname'] }}
-            </a>
-            {% else %}
-            Utilisateur inconnu
-            {% endif %}
-            · 👨‍🏫 {{ r['Meeting Animator'] or '-' }}
-          </small>
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3 align-items-end">
+      <div class="col-lg-5">
+        <label class="form-label d-block">Note sur le contenu</label>
+        <div class="d-flex flex-wrap gap-3">
+          {% for g in [1, 2, 3, 4, 5] %}
+            <div class="form-check form-check-inline m-0">
+              <input class="form-check-input" type="checkbox" name="grades" id="grade_{{ g }}" value="{{ g }}"
+                {% if g in selected_grades %}checked{% endif %}>
+              <label class="form-check-label" for="grade_{{ g }}">{{ g }}/5</label>
+            </div>
+          {% endfor %}
         </div>
-        <div class="ms-3">
-          ⭐ {{ r['Content Grade'] if r['Content Grade'] is not none else '-' }}/5
+        <div class="form-text">Par défaut : 1, 2 et 3.</div>
+      </div>
+
+      <div class="col-lg-3">
+        <label for="min_words" class="form-label">Nombre minimum de mots</label>
+        <div class="d-flex align-items-center gap-2">
+          <input type="range" id="min_words" name="min_words" class="form-range" min="1" max="100" step="1"
+            value="{{ min_words }}">
+          <span id="minWordsBadge" class="badge text-bg-secondary">{{ min_words }}</span>
         </div>
       </div>
 
-      {% if r['Comment'] %}
-      <div class="mt-2"><em>{{ r['Comment'] }}</em></div>
-      {% endif %}
-    </li>
-    {% endfor %}
-  </ul>
+      <div class="col-lg-3">
+        <label for="days" class="form-label">Période étudiée (jours)</label>
+        <div class="d-flex align-items-center gap-2">
+          <input type="range" id="days" name="days" class="form-range" min="1" max="180" step="1" value="{{ days }}">
+          <span id="daysBadge" class="badge text-bg-secondary">{{ days }}</span>
+        </div>
+      </div>
+
+      <div class="col-12 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Appliquer les filtres</button>
+        <a href="{{ url_for('main.commentaires') }}" class="btn btn-outline-secondary">Réinitialiser</a>
+      </div>
+    </form>
+  </div>
 </div>
-{% else %}
-<div class="alert alert-info">Aucun commentaire pour les filtres sélectionnés.</div>
-{% endif %}
 
-<p class="mt-4">
-  <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">← Retour au dashboard</a>
-</p>
-
+{{ ui.section_title('Avis', '%d avis sur les %d derniers jours' | format(comments | length, days)) }}
+{{ ui.comment_list(comments, 'Masterclass', show_animator=True,
+                   empty_message='Aucun commentaire pour les filtres sélectionnés.') }}
 {% endblock %}
 
 {% block scripts %}
 <script>
   document.addEventListener('DOMContentLoaded', function () {
-    const minWords = document.getElementById('min_words');
-    const minWordsBadge = document.getElementById('minWordsBadge');
-    if (minWords) minWords.addEventListener('input', () => minWordsBadge.textContent = minWords.value);
-
-    const days = document.getElementById('days');
-    const daysBadge = document.getElementById('daysBadge');
-    if (days) days.addEventListener('input', () => daysBadge.textContent = days.value);
+    [['min_words', 'minWordsBadge'], ['days', 'daysBadge']].forEach(function (pair) {
+      const input = document.getElementById(pair[0]);
+      const badge = document.getElementById(pair[1]);
+      if (input && badge) input.addEventListener('input', () => badge.textContent = input.value);
+    });
   });
 </script>
 {% endblock %}

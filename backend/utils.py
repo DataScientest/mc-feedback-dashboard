@@ -7,12 +7,17 @@ import logging
 import re
 import unicodedata
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 log = logging.getLogger(__name__)
 
 MAPPING_DIR = Path(__file__).parent / "mapping"
+
+# Horodatage de la dernière mise à jour des données (écrit en ISO 8601 UTC)
+LAST_UPDATE_FILE = Path("data/last_upload.txt")
+_LEGACY_UPDATE_FORMAT = "%d/%m/%Y à %H:%M"
 
 
 with open(MAPPING_DIR / "meeting_mapping.json", "r", encoding="utf-8") as f:
@@ -163,14 +168,96 @@ def format_date(date_str: str) -> str:
         return date_str
 
 
+# --- Horodatage France ------------------------------------------------------
+
+def get_paris_tz():
+    """
+    Fuseau horaire français. Retombe sur UTC si la base tzdata est absente
+    (image Docker minimale) plutôt que de faire échouer l'affichage.
+    """
+    try:
+        return ZoneInfo("Europe/Paris")
+    except (ZoneInfoNotFoundError, KeyError):
+        log.warning("Base tzdata introuvable, heure affichée en UTC. Installez le paquet 'tzdata'.")
+        return timezone.utc
+
+
+# Enregistre l'instant courant comme date de dernière mise à jour des données
+def write_last_update(moment=None):
+    moment = moment or datetime.now(timezone.utc)
+    LAST_UPDATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    LAST_UPDATE_FILE.write_text(moment.astimezone(timezone.utc).isoformat(), encoding="utf-8")
+    return moment
+
+
+# Relit la date de dernière mise à jour, convertie en heure de Paris
+def read_last_update():
+    """
+    Retourne un datetime timezone-aware en heure de Paris, ou None.
+    Accepte aussi l'ancien format "31/07/2026 à 15:35" (supposé heure de Paris).
+    """
+    try:
+        raw = LAST_UPDATE_FILE.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    if not raw:
+        return None
+
+    paris = get_paris_tz()
+    try:
+        moment = datetime.fromisoformat(raw)
+    except ValueError:
+        try:
+            moment = datetime.strptime(raw, _LEGACY_UPDATE_FORMAT)
+        except ValueError:
+            log.warning("Date de dernière mise à jour illisible : %r", raw)
+            return None
+
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=paris)
+    return moment.astimezone(paris)
+
+
+# Formatte un instant pour l'affichage : "31/07/2026 à 15:35"
+def format_paris(moment):
+    if moment is None:
+        return None
+    return moment.astimezone(get_paris_tz()).strftime(_LEGACY_UPDATE_FORMAT)
+
+
 # Filtrer les données par plage de dates
 def filter_by_date_range(df, start_date=None, end_date=None):
-    df = df.copy()
+    if start_date is None and end_date is None:
+        return df.copy()
+
+    # Un seul masque, donc une seule copie du DataFrame
+    dates = df['Meeting Start Date']
+    mask = pd.Series(True, index=df.index)
     if start_date is not None:
-        df = df[df['Meeting Start Date'] >= pd.to_datetime(start_date)]
+        mask &= dates >= pd.to_datetime(start_date)
     if end_date is not None:
-        df = df[df['Meeting Start Date'] <= pd.to_datetime(end_date)]
-    return df
+        mask &= dates <= pd.to_datetime(end_date)
+    return df[mask]
+
+
+# Classement (rang, libellé, moyenne) à partir des notes moyennes par groupe
+def build_leaderboard(df, group_col, grade_col, label_col):
+    """
+    Une seule agrégation pour tout le classement : la position découle
+    directement du tri par moyenne décroissante.
+    """
+    if df.empty:
+        return pd.DataFrame(columns=["Rang", label_col, "Moyenne"])
+
+    moyennes = (
+        df.groupby(group_col)[grade_col]
+          .mean().round(2).reset_index()
+          .rename(columns={group_col: label_col, grade_col: "Moyenne"})
+          .sort_values(by="Moyenne", ascending=False)
+          .reset_index(drop=True)
+    )
+    moyennes["Rang"] = moyennes.index + 1
+    return moyennes[["Rang", label_col, "Moyenne"]]
 
 
 # Retourne la date du meeting, la Masterclass, son animateur, les avis, la moyenne

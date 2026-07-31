@@ -1,0 +1,24 @@
+{# Filtre de période partagé par les pages de détail (animateur, masterclass). #}
+<form method="get" class="card mb-4">
+  <div class="card-body py-3">
+    <div class="row g-3 align-items-center">
+      <div class="col-auto">
+        <label for="days" class="col-form-label fw-semibold">Période (jours)</label>
+      </div>
+      <div class="col-auto">
+        <input type="number" id="days" name="days" class="form-control" style="width: 7rem;"
+               value="{{ days }}" min="1" max="3650">
+      </div>
+      <div class="col-auto">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="negative_only" name="negative_only" value="1"
+                 {% if negative_only %}checked{% endif %} onchange="this.form.submit()">
+          <label class="form-check-label" for="negative_only">Négatifs uniquement (3/5 ou moins)</label>
+        </div>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary">Appliquer</button>
+      </div>
+    </div>
+  </div>
+</form>

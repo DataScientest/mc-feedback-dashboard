@@ -1,0 +1,153 @@
+{# Composants d'affichage partagés par toutes les pages.
+   Objectif : un seul rendu pour les en-têtes, tableaux, notes et avis. #}
+
+{% set NEXUS_BASE = "https://nexus.datascientest.com" %}
+
+
+{# Fil d'ariane. items = [{'label': ..., 'url': ...}], le dernier est la page courante. #}
+{% macro breadcrumb(items) %}
+<nav aria-label="Fil d'ariane">
+  <ol class="breadcrumb small mb-2">
+    <li class="breadcrumb-item"><a href="{{ url_for('main.dashboard') }}" class="text-decoration-none">Dashboard</a></li>
+    {% for item in items %}
+      {% if loop.last or not item.url %}
+        <li class="breadcrumb-item active" aria-current="page">{{ item.label }}</li>
+      {% else %}
+        <li class="breadcrumb-item"><a href="{{ item.url }}" class="text-decoration-none">{{ item.label }}</a></li>
+      {% endif %}
+    {% endfor %}
+  </ol>
+</nav>
+{% endmacro %}
+
+
+{# En-tête de page : titre à gauche, actions optionnelles à droite. #}
+{% macro page_header(title, subtitle=None) %}
+<div class="page-header d-flex flex-wrap justify-content-between align-items-start gap-2 mb-4">
+  <div>
+    <h1 class="h3 mb-0">{{ title }}</h1>
+    {% if subtitle %}<p class="text-muted mb-0 mt-1">{{ subtitle }}</p>{% endif %}
+  </div>
+  <div class="d-flex gap-2 align-items-center">{{ caller() if caller else '' }}</div>
+</div>
+{% endmacro %}
+
+
+{# Titre de section, même niveau visuel partout. #}
+{% macro section_title(title, subtitle=None) %}
+<div class="mb-3">
+  <h2 class="h5 mb-0">{{ title }}</h2>
+  {% if subtitle %}<div class="text-muted small">{{ subtitle }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+
+{# Message d'absence de données, uniforme sur tout le site. #}
+{% macro empty_state(message, variant='info') %}
+<div class="alert alert-{{ variant }} mb-0">{{ message }}</div>
+{% endmacro %}
+
+
+{# Pastille de note colorée selon le même barème sur toutes les pages. #}
+{% macro grade_badge(value, suffix='/5') %}
+  {% if value is none or value == '' %}
+    <span class="badge bg-secondary">-{{ suffix }}</span>
+  {% else %}
+    {% set v = value | float(0) %}
+    <span class="badge {% if v < 3 %}bg-danger{% elif v < 4 %}bg-warning text-dark{% elif v < 5 %}bg-primary{% else %}bg-success{% endif %}">{{ value }}{{ suffix }}</span>
+  {% endif %}
+{% endmacro %}
+
+
+{# Liste clé/valeur dans une carte (statistiques générales, 30 jours, ...). #}
+{% macro stat_card(title, entries, badge=None) %}
+<div class="card h-100">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h2 class="h6 m-0">{{ title }}</h2>
+    {% if badge %}<span class="badge bg-secondary">{{ badge }}</span>{% endif %}
+  </div>
+  <div class="card-body">
+    <dl class="row mb-0 small">
+      {% for label, value in entries %}
+        <dt class="col-6 fw-semibold text-muted">{{ label }}</dt>
+        <dd class="col-6 mb-1 text-end">{{ value if value is not none else 'Aucune donnée' }}</dd>
+      {% endfor %}
+    </dl>
+  </div>
+</div>
+{% endmacro %}
+
+
+{# Tableau générique {columns, rows}.
+   linkify : 'animateur' | 'masterclass' | None, appliqué à la colonne link_col.
+   badge_col : colonne rendue sous forme de pastille de note.
+   card : englobe le tableau dans une carte (à désactiver s'il est déjà dans une). #}
+{% macro data_table(payload, empty_message='Aucune donnée.', linkify=None, link_col=None, badge_col=None, card=True) %}
+{% if payload and payload.rows %}
+  {% if card %}<div class="card"><div class="card-body p-0">{% endif %}
+  <div class="table-responsive">
+    <table class="table table-sm table-striped table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          {% for c in payload.columns %}<th scope="col">{{ c }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in payload.rows %}
+        <tr>
+          {% for c in payload.columns %}
+            {% if linkify == 'animateur' and c == link_col %}
+              <td><a href="{{ url_for('main.animateur_detail', animateur=r[c]) }}" class="text-decoration-none">{{ r[c] }}</a></td>
+            {% elif linkify == 'masterclass' and c == link_col %}
+              <td><a href="{{ url_for('main.masterclass_detail', masterclass=r[c]) }}" class="text-decoration-none">{{ r[c] }}</a></td>
+            {% elif c == badge_col %}
+              <td>{{ grade_badge(r[c]) }}</td>
+            {% else %}
+              <td>{{ r[c] }}</td>
+            {% endif %}
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if card %}</div></div>{% endif %}
+{% else %}
+  <div class="{{ 'p-3' if not card else '' }}">{{ empty_state(empty_message) }}</div>
+{% endif %}
+{% endmacro %}
+
+
+{# Liste d'avis. heading_field : champ affiché en titre de chaque avis. #}
+{% macro comment_list(comments, heading_field='Masterclass', show_animator=False, empty_message='Aucun commentaire sur cette période.') %}
+{% if comments %}
+<div class="list-group">
+  {% for c in comments %}
+  <div class="list-group-item">
+    <div class="d-flex w-100 justify-content-between align-items-start gap-3">
+      <h3 class="h6 mb-0 fw-bold">
+        {{ c[heading_field] }}
+        {{ grade_badge(c['Content Grade']) }}
+      </h3>
+      <small class="text-muted text-nowrap">{{ c['Meeting Start Date'] | date_fr }}</small>
+    </div>
+    {% if c['Comment'] %}<p class="mb-2 mt-2 fst-italic">{{ c['Comment'] }}</p>{% endif %}
+    <small class="text-secondary">
+      {% if c['User Fullname'] %}
+        <a href="{{ NEXUS_BASE }}/user/{{ c['User ID'] }}" target="_blank" rel="noopener" class="text-decoration-none">{{ c['User Fullname'] }}</a>
+      {% else %}
+        Utilisateur inconnu
+      {% endif %}
+      {% if show_animator and c['Meeting Animator'] %}
+        <span class="text-muted">|</span> {{ c['Meeting Animator'] }}
+      {% endif %}
+      <span class="text-muted">|</span>
+      <a href="{{ NEXUS_BASE }}/meeting/{{ c['Meeting ID'] }}" target="_blank" rel="noopener" class="text-decoration-none">Voir la session sur Nexus</a>
+    </small>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+  {{ empty_state(empty_message, 'success') }}
+{% endif %}
+{% endmacro %}

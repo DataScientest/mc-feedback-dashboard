@@ -1,12 +1,16 @@
 {% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% block title %}Upload | Dashboard Masterclass{% endblock %}
+
 {% block content %}
-<h2 class="mb-4">A récupérer sur Nexus Insights</h2>
+{{ ui.breadcrumb([{'label': 'Upload'}]) }}
+{{ ui.page_header('Upload manuel', 'Fichiers à récupérer sur Nexus Insights, section Surveys.') }}
 
 <div class="card">
   <div class="card-body">
     {% if last_upload_date %}
     <div class="alert alert-info">
-      📅 Dernier upload le : <strong>{{ last_upload_date }}</strong>
+      Dernière mise à jour des données : <strong>{{ last_upload_date }}</strong> (heure de Paris)
     </div>
     {% endif %}
     <form method="post" enctype="multipart/form-data">
