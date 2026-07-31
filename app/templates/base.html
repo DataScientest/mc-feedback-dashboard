@@ -26,42 +26,38 @@
         ('main.techaway', 'TechAway', ['main.techaway']),
         ('reeval.index', 'Time Reeval', []),
         ('main.slack_bot', 'Slack Bot', ['main.slack_bot']),
-        ('main.upload_files', 'Upload', ['main.upload_files']),
     ] %}
 
-    <nav class="navbar navbar-expand-xl navbar-light bg-light border-bottom">
-        <div class="container">
-            <a class="navbar-brand fw-semibold" href="{{ url_for('main.dashboard') }}">Masterclass</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain"
+    <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom py-1">
+        <div class="container-fluid px-4">
+            <button class="navbar-toggler btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain"
                 aria-controls="navbarMain" aria-expanded="false" aria-label="Basculer la navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
 
             <div class="collapse navbar-collapse" id="navbarMain">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <ul class="navbar-nav me-auto">
                     {% for endpoint, label, active_on in nav_links %}
                         {% set is_active = request.endpoint in active_on or (endpoint == 'reeval.index' and request.blueprint == 'reeval') %}
                         <li class="nav-item">
-                            <a class="nav-link {% if is_active %}active fw-bold{% endif %}"
+                            <a class="nav-link {% if is_active %}active fw-semibold{% endif %}"
                                 href="{{ url_for(endpoint) }}" {% if is_active %}aria-current="page"{% endif %}>{{ label }}</a>
                         </li>
                     {% endfor %}
                 </ul>
 
-                <ul class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-lg-center gap-2">
+                <ul class="navbar-nav ms-auto align-items-lg-center gap-2">
                     <li class="nav-item">
-                        <span class="navbar-text small text-muted lh-sm d-block text-lg-end"
+                        <span class="navbar-text small text-muted"
                             title="Dernière mise à jour des données, heure de Paris">
-                            Mise à jour<span class="d-none d-xl-inline"> des données</span> :
-                            <span class="fw-semibold text-body">{{ last_update or 'jamais' }}</span>
-                            <span class="d-none d-xl-inline">(Paris)</span>
+                            Mise à jour : <span class="fw-semibold text-body">{{ last_update or 'jamais' }}</span>
                         </span>
                     </li>
                     <li class="nav-item">
-                        <button class="btn btn-sm btn-primary" onclick="initRefreshData()" id="btnRefreshData">
+                        <button class="btn btn-sm btn-primary text-nowrap" onclick="initRefreshData()" id="btnRefreshData">
                             <span id="refreshSpinner" class="spinner-border spinner-border-sm d-none" role="status"
                                 aria-hidden="true"></span>
-                            <span id="refreshText">Actualiser les données</span>
+                            <span id="refreshText">Actualiser</span>
                         </button>
                     </li>
                     <li class="nav-item">
@@ -73,12 +69,17 @@
                             {% endfor %}
                         </div>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link-discret {% if request.endpoint == 'main.upload_files' %}fw-semibold{% endif %}"
+                            href="{{ url_for('main.upload_files') }}"
+                            title="Import manuel de CSV, en secours de l'actualisation automatique">Upload</a>
+                    </li>
                 </ul>
             </div>
         </div>
     </nav>
 
-    <main class="container my-4">
+    <main class="container-fluid px-4 my-4">
         {% with messages = get_flashed_messages() %}
             {% if messages %}
                 {% for message in messages %}
@@ -190,7 +191,7 @@
                 btn.disabled = false;
                 if (btnCreds) btnCreds.disabled = false;
                 spinner.classList.add("d-none");
-                text.textContent = "Actualiser les données";
+                text.textContent = "Actualiser";
             }
         }
 

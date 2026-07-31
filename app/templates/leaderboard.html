@@ -39,6 +39,8 @@
 
       {% if roles %}
         <div class="col-12">
+          {# Permet de distinguer "toutes les cases décochées" de "aucun filtre envoyé" #}
+          <input type="hidden" name="roles_set" value="1">
           <label class="form-label d-block">Filtrer par rôle</label>
           <div class="d-flex flex-wrap gap-3">
             {% for r in roles %}
@@ -49,6 +51,7 @@
               </div>
             {% endfor %}
           </div>
+          <div class="form-text">Par défaut : Expert uniquement.</div>
         </div>
       {% endif %}
 

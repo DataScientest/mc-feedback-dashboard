@@ -620,6 +620,10 @@ def masterclass_detail(masterclass: str):
         return _internal_error(f"Unhandled error on {request.path}")
 
 
+# Rôles affichés par défaut dans le leaderboard
+DEFAULT_LEADERBOARD_ROLES = ["Expert"]
+
+
 @bp.route("/leaderboard")
 def leaderboard():
     try:
@@ -637,6 +641,11 @@ def leaderboard():
 
         # Filtre multi-rôles : /leaderboard?role=Expert&role=PM
         selected_roles = [r for r in request.args.getlist("role") if r in roles]
+        if not selected_roles and not request.args.get("roles_set"):
+            # Sélection par défaut ; roles_set distingue "aucun filtre choisi"
+            # d'un formulaire envoyé avec toutes les cases décochées
+            selected_roles = [r for r in DEFAULT_LEADERBOARD_ROLES if r in roles]
+
         if selected_roles:
             # filtrer le DF principal, tout le reste (30j, etc.) en hérite
             df = df[df["Animator Role"].astype(str).isin(selected_roles)]

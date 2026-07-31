@@ -1,3 +1,29 @@
+/* === Barre de navigation compacte === */
+
+/* Liens resserrés : la barre tient sur une seule ligne peu haute */
+.navbar .navbar-nav .nav-link {
+    padding: .2rem .6rem;
+    font-size: .9rem;
+}
+
+.navbar .navbar-nav .nav-link.active {
+    color: #0d6efd;
+}
+
+/* Accès de secours à l'upload manuel : présent mais volontairement effacé */
+.nav-link-discret {
+    padding: .2rem .5rem;
+    font-size: .8rem;
+    color: #9ca3af;
+    text-decoration: none;
+}
+
+.nav-link-discret:hover,
+.nav-link-discret:focus {
+    color: #6b7280;
+    text-decoration: underline;
+}
+
 /* === Mise en page commune à toutes les pages === */
 
 /* En-tête de page : même respiration et même séparation partout */

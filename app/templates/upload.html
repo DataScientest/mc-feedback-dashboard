@@ -4,49 +4,50 @@
 
 {% block content %}
 {{ ui.breadcrumb([{'label': 'Upload'}]) }}
-{{ ui.page_header('Upload manuel', 'Fichiers à récupérer sur Nexus Insights, section Surveys.') }}
 
-<div class="card">
-  <div class="card-body">
-    {% if last_upload_date %}
-    <div class="alert alert-info">
-      Dernière mise à jour des données : <strong>{{ last_upload_date }}</strong> (heure de Paris)
+<div class="row justify-content-center">
+  <div class="col-lg-8 col-xl-7">
+    <h1 class="h5 mb-1">Upload manuel</h1>
+    <p class="text-muted small">
+      Solution de secours : les données sont normalement récupérées par le bouton
+      <strong>Actualiser</strong> de la barre de navigation. N'utilisez cette page que si
+      l'actualisation automatique échoue.
+    </p>
+
+    <p class="text-muted small mb-4">
+      Dernière mise à jour des données :
+      <strong>{{ last_upload_date or 'jamais' }}</strong>{% if last_upload_date %} (heure de Paris){% endif %}
+    </p>
+
+    <div class="card border-0 bg-light">
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+          <div class="row g-4">
+            {% for prefix, title, source in [
+              ('mc_file', 'Feedback Masterclass', 'post_meeting_masterclass'),
+              ('ta_file', 'Feedback TechAway', 'techaway_post_tp'),
+            ] %}
+              <div class="col-md-6">
+                <h2 class="h6 mb-1">{{ title }}</h2>
+                <p class="text-muted small font-monospace mb-3">Nexus > Insights > Surveys > {{ source }}</p>
+                {% for lang in ['fr', 'en'] %}
+                  <div class="mb-3">
+                    <label for="{{ prefix }}_{{ lang }}" class="form-label small">{{ lang | upper }}</label>
+                    <input class="form-control form-control-sm" type="file"
+                           id="{{ prefix }}_{{ lang }}" name="{{ prefix }}_{{ lang }}" accept=".csv">
+                  </div>
+                {% endfor %}
+              </div>
+            {% endfor %}
+          </div>
+
+          <div class="d-flex gap-2 mt-2">
+            <button type="submit" class="btn btn-sm btn-outline-primary">Uploader</button>
+            <button type="reset" class="btn btn-sm btn-outline-secondary">Réinitialiser</button>
+          </div>
+        </form>
+      </div>
     </div>
-    {% endif %}
-    <form method="post" enctype="multipart/form-data">
-      <div class="row g-4">
-        <!-- Colonne 1 : Feedback Masterclass -->
-        <div class="col-lg-6">
-          <h5 class="mb-3">Feedback Masterclass : post_meeting_masterclass</h5>
-          <div class="mb-3">
-            <label for="mc_file_fr" class="form-label">FR</label>
-            <input class="form-control" type="file" id="mc_file_fr" name="mc_file_fr" accept=".csv">
-          </div>
-          <div class="mb-3">
-            <label for="mc_file_en" class="form-label">EN</label>
-            <input class="form-control" type="file" id="mc_file_en" name="mc_file_en" accept=".csv">
-          </div>
-        </div>
-
-        <!-- Colonne 2 : Feedback TechAway -->
-        <div class="col-lg-6">
-          <h5 class="mb-3">Feedback TechAway : techaway_post_tp</h5>
-          <div class="mb-3">
-            <label for="ta_file_fr" class="form-label">FR</label>
-            <input class="form-control" type="file" id="ta_file_fr" name="ta_file_fr" accept=".csv">
-          </div>
-          <div class="mb-3">
-            <label for="ta_file_en" class="form-label">EN</label>
-            <input class="form-control" type="file" id="ta_file_en" name="ta_file_en" accept=".csv">
-          </div>
-        </div>
-      </div>
-
-      <div class="d-flex gap-2 mt-3">
-        <button type="submit" class="btn btn-primary">Uploader</button>
-        <button type="reset" class="btn btn-outline-secondary">Réinitialiser</button>
-      </div>
-    </form>
   </div>
 </div>
 {% endblock %}
