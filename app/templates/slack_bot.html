@@ -6,10 +6,6 @@
 {{ ui.breadcrumb([{'label': 'Slack Bot'}]) }}
 {{ ui.page_header('Slack Bot', 'Envoyer un récapitulatif dans le canal Slack.') }}
 
-{% if message %}
-  <div class="alert alert-info">{{ message }}</div>
-{% endif %}
-
 <div class="row g-4">
   {% for action, title, description in [
     ('wof', 'Top animateurs', 'Récap des meilleurs animateurs des 30 derniers jours.'),
@@ -23,7 +19,7 @@
         </div>
         <div class="card-body d-flex flex-column justify-content-between gap-3">
           <p class="text-muted small mb-0">{{ description }}</p>
-          <form method="post">
+          <form method="post" class="js-slack-form">
             <input type="hidden" name="action" value="{{ action }}">
             <button type="submit" class="btn btn-outline-primary w-100">
               <img src="{{ url_for('static', filename='images/slack-logo.png') }}" alt=""
@@ -36,4 +32,25 @@
     </div>
   {% endfor %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // L'envoi Slack prend plusieurs secondes : sans ça, un second clic pendant
+    // l'attente poste le récap une deuxième fois.
+    document.querySelectorAll('form.js-slack-form').forEach(function (form) {
+        form.addEventListener('submit', function () {
+            // Différé d'un tick : désactiver le bouton pendant l'évènement
+            // submit empêcherait l'envoi du formulaire sur certains navigateurs.
+            setTimeout(function () {
+                document.querySelectorAll('form.js-slack-form button[type=submit]').forEach(function (btn) {
+                    btn.disabled = true;
+                });
+                const btn = form.querySelector('button[type=submit]');
+                btn.innerHTML =
+                    '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Envoi en cours...';
+            }, 0);
+        });
+    });
+</script>
 {% endblock %}

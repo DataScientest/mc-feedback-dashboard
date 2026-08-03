@@ -22,6 +22,11 @@ Application Flask pour suivre la qualité des **masterclasses** et des **animate
   * **Slider** du seuil minimal de sessions (une session = Meeting ID unique)
 * **Slack Bot** :
   * 3 boutons pour envoyer les récap (Top, Not Top, Commentaires négatifs)
+  * Récap hebdomadaire automatique des commentaires négatifs, le lundi à 05:00
+    (heure de Paris). Le créneau est revérifié chaque jour à 05:00 et au
+    démarrage de l'app : un envoi manqué (API Nexus indisponible, conteneur
+    arrêté) est rattrapé, et l'horodatage `data/last_weekly_report.txt` garantit
+    un seul envoi par semaine.
 * **Time Reevaluation (Time Reeval)** :
   * Comparaison du temps recommande et reel pour les exercices
   * Ajout de sources de donnees par User ID ou Cohort ID
@@ -115,7 +120,8 @@ slack_bot_flask/
 │  ├─ kpi_techaway.py               # logique techaway
 │  ├─ preprocess.py                 # preprocess et light_preprocess
 │  ├─ reporting.py                  # formattage des messages pour Slack
-│  ├─ scheduler.py                  # WIP - reporting récurrent
+│  ├─ scheduler.py                  # job du récap hebdomadaire
+│  ├─ job_state.py                  # verrous inter-workers & suivi du récap hebdo
 │  ├─ utils.py                      # fonctions utilitaires
 │  └─ mapping/
 ├─ data/

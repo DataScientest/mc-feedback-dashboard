@@ -22,6 +22,7 @@ from backend.reporting import *
 from backend.utils import meeting_mapping, pole_mapping, format_paris, read_last_update, write_last_update
 from backend.nexus_client import load_credentials, save_credentials, get_auth, refresh_data_from_nexus, refresh_techaway_from_nexus
 from backend.audit import audit_log
+from backend.job_state import single_run
 from .extensions import limiter
 
 log = logging.getLogger(__name__)
@@ -717,29 +718,42 @@ def leaderboard():
 
 
 
+SLACK_SENDERS = {
+    "wof": (send_top_animators_message, "Message Wall of Fame envoyé sur Slack."),
+    "wos": (send_not_top_animators_message, "Message Wall of Not Fame envoyé sur Slack."),
+    "bad": (send_bad_sessions, "Récap commentaires négatifs envoyé sur Slack."),
+}
+
+
 @bp.route("/slack_bot", methods=["GET", "POST"])
 def slack_bot():
     """
     Page dédiée au Slack Bot.
     """
-    senders = {
-        "wof": (send_top_animators_message, "Message Wall of Fame envoyé sur Slack."),
-        "wos": (send_not_top_animators_message, "Message Wall of Not Fame envoyé sur Slack."),
-        "bad": (send_bad_sessions, "Récap commentaires négatifs envoyé sur Slack."),
-    }
     try:
-        message = None
-
         if request.method == "POST":
             action = request.form.get("action")
-            if action in senders:
-                send, message = senders[action]
-                send(_load_df())
-                audit_log("slack_message_sent", action)
-            else:
-                message = "Action inconnue."
+            sender = SLACK_SENDERS.get(action)
 
-        return render_template("slack_bot.html", message=message)
+            if sender is None:
+                flash("Action inconnue.")
+            else:
+                send, message = sender
+                # Verrou partagé par tous les workers : un double-clic ou un
+                # renvoi du formulaire pendant l'envoi (qui dure plusieurs
+                # secondes) ne peut pas poster le récap une seconde fois.
+                with single_run(f"slack_{action}") as acquired:
+                    if not acquired:
+                        flash("Un envoi est déjà en cours : message non renvoyé.")
+                    else:
+                        send(_load_df())
+                        audit_log("slack_message_sent", action)
+                        flash(message)
+
+            # Post/Redirect/Get : recharger la page ne repostera pas le message.
+            return redirect(url_for("main.slack_bot"))
+
+        return render_template("slack_bot.html")
     except FileNotFoundError:
         return render_template("no_data.html")
     except Exception:

@@ -211,6 +211,8 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# App runtime secrets & logs
+# App runtime secrets, état des jobs & logs
 data/credentials.json
+data/last_weekly_report.txt
+data/*.lock
 logs/

@@ -2,14 +2,26 @@ from flask import Flask, request, redirect, render_template, jsonify
 import config
 from apscheduler.schedulers.background import BackgroundScheduler
 from backend.scheduler import job_generate_weekly_report
+from backend.job_state import bootstrap_weekly_marker, weekly_report_due
 import logging
 from logging.handlers import RotatingFileHandler
 import os
+import socket
+import threading
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .extensions import limiter
 
 _logging_configured = False
+
+# Port sans usage réseau, servant uniquement de verrou entre workers Gunicorn
+SCHEDULER_LOCK_PORT = 47200
+
+# Le socket du verrou et le scheduler sont gardés dans des globales : une
+# variable locale serait collectée dès la sortie de create_app(), le port
+# serait relibéré et chaque worker démarrerait alors son propre scheduler.
+_scheduler_lock_socket = None
+_scheduler = None
 
 
 def _setup_logging():
@@ -98,17 +110,62 @@ def create_app():
 
     # Prevent APScheduler from running twice with Flask auto reloader or Gunicorn workers
     if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
-        import socket
-        try:
-            # Bind to a local port to ensure only one worker starts the scheduler
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.bind(("127.0.0.1", 47200))
-        except socket.error:
-            app.logger.info("Scheduler already started in another worker.")
-        else:
-            scheduler = BackgroundScheduler()
-            # Run every Monday at 05:00 AM
-            scheduler.add_job(func=job_generate_weekly_report, trigger="cron", day_of_week='mon', hour=5, minute=0)
-            scheduler.start()
+        _start_scheduler(app)
 
     return app
+
+
+def _start_scheduler(app):
+    """Démarre le scheduler dans un seul worker et rattrape un récap manqué."""
+    global _scheduler_lock_socket, _scheduler
+
+    if _scheduler is not None:
+        return
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        # Le premier worker qui réserve le port est celui qui porte le scheduler
+        sock.bind(("127.0.0.1", SCHEDULER_LOCK_PORT))
+    except OSError:
+        sock.close()
+        app.logger.info("Scheduler déjà démarré dans un autre worker.")
+        return
+    _scheduler_lock_socket = sock
+
+    scheduler = BackgroundScheduler(timezone="Europe/Paris")
+    # Déclenché tous les jours à 05:00 : le job lui-même n'envoie que si le
+    # récap du lundi n'est pas encore parti, ce qui rattrape une semaine ratée
+    # (Nexus HS, conteneur redémarré) sans jamais envoyer deux fois.
+    scheduler.add_job(
+        func=job_generate_weekly_report,
+        trigger="cron",
+        hour=5,
+        minute=0,
+        id="weekly_report",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        # Sans ça, APScheduler abandonne l'exécution dès 1 s de retard
+        misfire_grace_time=3600,
+    )
+    scheduler.start()
+    _scheduler = scheduler
+    app.logger.info(
+        "Scheduler démarré : récap hebdo du lundi, vérifié chaque jour à 05:00 (Europe/Paris)."
+    )
+
+    threading.Thread(target=_weekly_catch_up, args=(app,), daemon=True).start()
+
+
+def _weekly_catch_up(app):
+    """
+    Au démarrage, envoie le récap si le créneau du lundi est passé sans envoi
+    (typiquement : l'app était arrêtée à 05:00 lundi matin).
+    """
+    try:
+        if bootstrap_weekly_marker() or not weekly_report_due():
+            return
+        app.logger.warning("Récap hebdo manquant au démarrage : rattrapage en cours.")
+        job_generate_weekly_report()
+    except Exception:
+        app.logger.exception("Échec du rattrapage du récap hebdomadaire.")
