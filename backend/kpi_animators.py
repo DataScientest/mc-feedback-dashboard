@@ -176,18 +176,18 @@ def _format_note(note):
     return int(note) if note.is_integer() else round(note, 1)
 
 
-# Retourne les sessions d'un animateur dans les 30 derniers jours
-def get_sessions_30j_animateur(df, animateur):
+# Retourne les sessions d'un animateur sur les `days` derniers jours
+def get_sessions_animateur(df, animateur, days=30):
     cols = ['Meeting Start Date', 'Masterclass', 'Note_Moyenne', 'Nb_Notes', 'Notes', 'Meeting ID']
 
-    df_30j = filter_by_date_range(df, start_date=datetime.now() - timedelta(days=30))
-    df_30j = df_30j[df_30j["Meeting Animator"] == animateur]
+    df_periode = filter_by_date_range(df, start_date=datetime.now() - timedelta(days=days))
+    df_periode = df_periode[df_periode["Meeting Animator"] == animateur]
 
-    if df_30j.empty:
+    if df_periode.empty:
         return pd.DataFrame(columns=cols)
 
     df_sessions = (
-        df_30j
+        df_periode
         .groupby(['Masterclass', 'Meeting Start Date', 'Meeting ID'], as_index=False)
         .agg(
             Note_Moyenne=('Animator Grade', 'mean'),

@@ -31,8 +31,8 @@
   </section>
 </div>
 
-{{ ui.section_title('Détail des sessions', '30 derniers jours') }}
-{% if sessions_30j_table.rows %}
+{{ ui.section_title('Détail des sessions', '%d derniers jours' | format(days)) }}
+{% if sessions_table.rows %}
   <div class="card mb-4">
     <div class="card-body p-0">
       <div class="table-responsive">
@@ -48,7 +48,7 @@
             </tr>
           </thead>
           <tbody>
-            {% for r in sessions_30j_table.rows %}
+            {% for r in sessions_table.rows %}
               <tr>
                 <td class="text-nowrap">{{ r['Meeting Start Date'] }}</td>
                 <td>
@@ -74,7 +74,7 @@
     </div>
   </div>
 {% else %}
-  <div class="mb-4">{{ ui.empty_state('Aucune session sur les 30 derniers jours.') }}</div>
+  <div class="mb-4">{{ ui.empty_state('Aucune session sur les %d derniers jours.' | format(days)) }}</div>
 {% endif %}
 
 {{ ui.section_title(

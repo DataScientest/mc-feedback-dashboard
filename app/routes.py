@@ -497,7 +497,7 @@ def animateur_detail(animateur: str):
             sessions_30j=get_nb_sessions_animateur_30j(df, animateur),
             moyenne_30j=round(moyenne_30j, 2) if moyenne_30j and moyenne_30j > 0 else None,
             classement_30j=classement_30j or "Non classé",
-            sessions_30j_table=_table_payload(get_sessions_30j_animateur(df, animateur)),
+            sessions_table=_table_payload(get_sessions_animateur(df, animateur, days=days)),
             mc_table=_table_payload(get_masterclasses_by_animateur(df, animateur)),
             days=days,
             negative_only=negative_only,
@@ -624,6 +624,9 @@ def masterclass_detail(masterclass: str):
 # Rôles affichés par défaut dans le leaderboard
 DEFAULT_LEADERBOARD_ROLES = ["Expert"]
 
+# Fenêtre au-delà de laquelle un animateur est considéré comme inactif
+ACTIVE_WINDOW_DAYS = 30
+
 
 @bp.route("/leaderboard")
 def leaderboard():
@@ -651,16 +654,34 @@ def leaderboard():
             # filtrer le DF principal, tout le reste (30j, etc.) en hérite
             df = df[df["Animator Role"].astype(str).isin(selected_roles)]
 
+        # Actifs uniquement, coché par défaut ; active_set distingue "case décochée"
+        # de "aucun filtre envoyé" (premier affichage de la page)
+        active_only = (
+            bool(request.args.get("active_only", type=int))
+            if request.args.get("active_set") else True
+        )
+
+        # Un animateur est actif s'il a animé au moins une session sur la fenêtre.
+        # On filtre par animateur, et non par date, pour que les classements
+        # "tout" conservent l'historique complet des animateurs retenus.
+        df_anim = df
+        if active_only:
+            anim_col = _animator_column(df)
+            recent = filter_by_date_range(
+                df, start_date=datetime.now() - timedelta(days=ACTIVE_WINDOW_DAYS)
+            )
+            df_anim = df[df[anim_col].isin(set(recent[anim_col].dropna().unique()))]
+
         # Les tableaux sont construits à la demande : seuls les deux affichés sont calculés
         options = {
             "anim": {
                 "label": "Animateurs (tout)", "type": "animateur",
                 "build": lambda: get_leaderboard_animateurs(
-                    get_animateurs_plus_de_20_sessions(df, min_sessions), min_sessions),
+                    get_animateurs_plus_de_20_sessions(df_anim, min_sessions), min_sessions),
             },
             "anim30": {
                 "label": "Animateurs (30 jours)", "type": "animateur",
-                "build": lambda: get_leaderboard_animateurs_30j(df),
+                "build": lambda: get_leaderboard_animateurs_30j(df_anim),
             },
             "mc": {
                 "label": "Masterclasses (tout)", "type": "masterclass",
@@ -709,6 +730,8 @@ def leaderboard():
             min_sessions=min_sessions,
             roles=roles,
             selected_roles=selected_roles,
+            active_only=active_only,
+            active_window_days=ACTIVE_WINDOW_DAYS,
         )
     except FileNotFoundError:
         return render_template("no_data.html")
