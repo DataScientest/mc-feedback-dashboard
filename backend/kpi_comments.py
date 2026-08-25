@@ -19,11 +19,11 @@ def get_nb_sessions_masterclass_30j_in_kpi_comments(df, masterclass):
 def get_masterclasses_with_negative_feedback(df, seuil=3, min_negatifs=1, longueur_min_avis=3):
     # Filtrer les 7 derniers jours
     df_1s = filter_by_date_range(df, start_date=datetime.now() - timedelta(days=7))
-    
+
     # if df_1s is empty, return message
     if df_1s.empty:
         return "Aucun avis dans la dernière semaine."
-    
+
     # Filtrer uniquement les notes <= seuil
     df_neg = df_1s[df_1s['Content Grade'] <= seuil].copy()
 
@@ -40,14 +40,14 @@ def get_masterclasses_with_negative_feedback(df, seuil=3, min_negatifs=1, longue
         nb_negatifs = len(group)
         if nb_negatifs >= min_negatifs:
             avis_list = (
-                group[['Meeting ID', 'Meeting Start Date', 'Meeting Animator', 
+                group[['Meeting ID', 'Meeting Start Date', 'Meeting Animator',
                        'Comment', 'User Fullname', 'User ID', 'Content Grade']]
                 .sort_values(by='Meeting Start Date', ascending=False)
                 .to_dict('records')
             )
 
             nb_sessions = get_nb_sessions_masterclass_30j_in_kpi_comments(df, mc)
-            
+
             records.append({
                 'Masterclass': mc,
                 'Nombre Avis Négatifs': nb_negatifs,
@@ -57,12 +57,12 @@ def get_masterclasses_with_negative_feedback(df, seuil=3, min_negatifs=1, longue
 
     if not records:
         return "Aucun avis négatif notable dernièrement."
-    
+
     df_final = pd.DataFrame(records).sort_values(by='Nombre Avis Négatifs', ascending=False).reset_index(drop=True)
     return df_final
 
 
-# Récupère les sessions de moins de 3.5 de moyenne 
+# Récupère les sessions de moins de 3.5 de moyenne
 def get_bad_rated_masterclasses(
     df,
     seuil_moyenne=4,
@@ -165,9 +165,14 @@ def get_comments(
     df,
     seuil=...,
     longueur_min_avis=3,
-    start_date=datetime.now() - timedelta(days=30),
-    end_date=datetime.now()
+    start_date=None,
+    end_date=None
 ):
+    # Valeurs par défaut calculées à l'appel : figées dans la signature, elles
+    # resteraient bloquées sur la date de démarrage du processus.
+    end_date = end_date or datetime.now()
+    start_date = start_date or end_date - timedelta(days=30)
+
     df_period = filter_by_date_range(df, start_date=start_date, end_date=end_date)
 
     target_cols = [

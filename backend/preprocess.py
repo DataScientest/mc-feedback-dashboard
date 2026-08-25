@@ -1,62 +1,134 @@
 # Preprocess the raw csv file(s) into a cleaned csv file.
 
 
+import logging
+from pathlib import Path
+
+import pandas as pd
+
 from backend.utils import *
 
 
 from flask import session, has_request_context
 
+log = logging.getLogger(__name__)
+
+# Fichiers bruts déposés par Nexus ou par l'upload manuel, groupés par paire
+# FR/EN. Nom de fichier standardisé : c'est le contrat entre le téléchargement
+# Nexus, l'upload manuel et le retraitement.
+SOURCE_FILES = [
+    ("data/uploads/post_meeting_masterclass.csv", "data/uploads/post_meeting_masterclass_en.csv"),
+    ("data/uploads/techaway_post_tp.csv", "data/uploads/techaway_post_tp_en.csv"),
+]
+
+# Fichier unique consommé par toutes les vues.
+PROCESSED_PATH = Path("data/processed/merged_processed.csv")
+
+
+# Colonnes attendues dans un export brut Nexus. « Language » est ajoutée par
+# preprocess_data() et ne fait donc pas partie du contrat d'entrée.
+RAW_REQUIRED_COLUMNS = (
+    "Survey Answer Date", "Cohort ID", "User ID", "User Fullname", "Meeting Animator",
+    "Meeting Name", "Meeting ID", "Meeting Start Date", "Question ID", "Answer",
+)
+
+
+def missing_raw_columns(df):
+    """Colonnes d'export Nexus absentes de `df` (vide si le fichier est conforme)."""
+    if df is None:
+        return list(RAW_REQUIRED_COLUMNS)
+    return [c for c in RAW_REQUIRED_COLUMNS if c not in df.columns]
+
+
+def read_csv_or_none(path):
+    """DataFrame lu depuis `path`, ou None si le fichier est absent ou illisible."""
+    try:
+        return pd.read_csv(path)
+    except (OSError, ValueError, pd.errors.ParserError):
+        return None
+
+
+def rebuild_processed_file():
+    """
+    Retraite TOUS les CSV bruts présents sur le disque vers PROCESSED_PATH.
+
+    Toujours repartir de l'ensemble des sources : ne traiter qu'un sondage
+    (masterclass seul, par exemple) écraserait les lignes de l'autre, qui
+    disparaîtraient alors des pages correspondantes.
+
+    Retourne le DataFrame écrit, ou None si aucune donnée exploitable.
+    """
+    dfs_processed = []
+    for fr_path, en_path in SOURCE_FILES:
+        df = preprocess_data(read_csv_or_none(fr_path), read_csv_or_none(en_path))
+        if df is not None and not df.empty:
+            dfs_processed.append(df)
+
+    if not dfs_processed:
+        log.warning("Retraitement : aucune donnée exploitable dans %s", [p for p, _ in SOURCE_FILES])
+        return None
+
+    merged = pd.concat(dfs_processed, ignore_index=True)
+    PROCESSED_PATH.parent.mkdir(parents=True, exist_ok=True)
+    merged.to_csv(PROCESSED_PATH, index=False)
+    write_last_update()
+    log.info("Retraitement terminé : %d lignes écrites dans %s", len(merged), PROCESSED_PATH)
+    return merged
+
 # Prétraitement des données brutes
 def preprocess_data(df_fr, df_en=None):
     """
-    In: 
+    In:
     Language,Survey Answer Time,Survey Answer Date,Cohort ID,Cohort Program,
     Cohort Subpartner Name,User ID,User Fullname,User Email,Question ID,Question,
     Answer,Meeting Animator,Meeting Name,Meeting ID,Meeting Start Date,Project ID
 
     Out:
     Language, Cohort ID, User ID, User Fullname, Animator Grade, Content Grade, Comment,
-    Meeting Animator, Meeting Name, Meeting ID, Meeting Start Date, Masterclass, 
+    Meeting Animator, Meeting Name, Meeting ID, Meeting Start Date, Masterclass,
     Animator Role
     """
-    
+
     dfs = []
-    if df_fr is not None:
-        dff = df_fr.copy()
-        dff["Language"] = "FR"
-        dfs.append(dff)
-    
-    if df_en is not None:
-        dfe = df_en.copy()
-        dfe["Language"] = "EN"
-        dfs.append(dfe)
-        
+    for source, lang in ((df_fr, "FR"), (df_en, "EN")):
+        if source is None:
+            continue
+        missing = missing_raw_columns(source)
+        if missing:
+            # Fichier hors format : on l'ignore au lieu de faire échouer tout
+            # le retraitement sur un KeyError.
+            log.warning("Export %s ignoré : colonnes manquantes %s", lang, missing)
+            continue
+        frame = source.copy()
+        frame["Language"] = lang
+        dfs.append(frame)
+
     if not dfs:
         return None
-        
+
     df = pd.concat(dfs, ignore_index=True)
-    
+
     df = df[['Language', 'Survey Answer Date', 'Cohort ID', 'User ID', 'User Fullname', 'Meeting Animator',
             'Meeting Name', 'Meeting ID', 'Meeting Start Date', 'Question ID', 'Answer']]
-    
+
     df = df.copy()
-    
+
     # if Meeting Start Date has more than 90% NaNs, consider Survey Answer Time instead
     if df["Meeting Start Date"].isna().mean() > 0.9:
         df = df.drop(columns=["Meeting Start Date"])
         df = df.rename(columns={"Survey Answer Date": "Meeting Start Date"})
     else:
         df = df.drop(columns=["Survey Answer Date"])
-    
-    
+
+
     df["Meeting Animator"] = df["Meeting Animator"].fillna("Missing")
     # --- Modif: Normalisation datascientest.com -> liora.io ---
     df["Meeting Animator"] = df["Meeting Animator"].str.replace("@datascientest.com", "@liora.io", regex=False)
     df["Meeting Animator"] = df["Meeting Animator"].str.replace("@cyberuniversity.com", "@liora.io", regex=False)
-    
+
     df["Meeting Name"] = df["Meeting Name"].fillna("Missing")
     df["Meeting Start Date"] = df["Meeting Start Date"].fillna("01/01/1970 00:00")
-        
+
     qid_map = {
         # Question 1 : Animator Grade
         '4d3a0ab6-2a9f-4dba-bc74-2b2aa48151a7': "Animator Grade",  # FR
@@ -80,7 +152,7 @@ def preprocess_data(df_fr, df_en=None):
         '4fcb5e59-63d8-4dd7-b340-55d939b485e7': "Comment",  # FR TechAway post TP
         '2346e81c-4f44-409d-810c-56ca6c2891c6': "Comment",  # EN TechAway post TP
     }
-    
+
     df["Answer_Type"] = df["Question ID"].map(qid_map)
     meta_cols = ["Language", "Cohort ID","User ID","User Fullname",
                  "Meeting Animator","Meeting Name","Meeting ID","Meeting Start Date"]
@@ -93,26 +165,26 @@ def preprocess_data(df_fr, df_en=None):
         )
         .reset_index()
     )
-        
+
     meta_unique = df.groupby(["User ID","Meeting Name"]).first().reset_index()[meta_cols]
     final = pd.merge(meta_unique, pivoted, on=["User ID","Meeting Name"], how="left")
     final_cols = meta_cols + ["Animator Grade","Content Grade","Comment"]
-    final = final[final_cols]    
-    final.dropna(subset=["Animator Grade"], inplace=True)    
+    final = final[final_cols]
+    final.dropna(subset=["Animator Grade"], inplace=True)
     final["Content Grade"] = final["Content Grade"].fillna(final["Animator Grade"])
     final["Comment"] = final["Comment"].fillna("")
-    
+
     # print(final.head())
-    
+
     final["Meeting Start Date"] = pd.to_datetime(final["Meeting Start Date"], format="%d/%m/%Y %H:%M", errors='coerce')
-    
+
     final.dropna(inplace=True)
     final["Animator Grade"] = pd.to_numeric(final["Animator Grade"], errors='coerce')
     final["Content Grade"] = pd.to_numeric(final["Content Grade"], errors='coerce')
     final["Masterclass"] = final["Meeting Name"].apply(get_mc_name)
     final["Verticale"] = final["Masterclass"].apply(get_verticale_techaway)
     final["Animator Role"] = final["Meeting Animator"].apply(get_role)
-    
+
     final.drop_duplicates(subset=["User ID", "Meeting Name"], keep="first", inplace=True)
 
     return final
@@ -128,7 +200,7 @@ def light_preprocess(df):
     df["Meeting Animator"] = df["Meeting Animator"].str.replace("@cyberuniversity.com", "@liora.io", regex=False)
 
     df['Meeting Start Date'] = pd.to_datetime(df['Meeting Start Date'], errors='coerce')
-    
+
     if has_request_context():
         lang = session.get('lang_filter', 'ALL')
         if lang in ['FR', 'EN'] and "Language" in df.columns:

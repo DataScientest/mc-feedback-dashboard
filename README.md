@@ -40,7 +40,7 @@ Application Flask pour suivre la qualité des **masterclasses** et des **animate
 * **Identifiants chiffrés au repos** : les identifiants Nexus partagés sont stockés chiffrés (Fernet) dans `data/credentials.json`. La clé vient de la variable d'environnement `CREDENTIALS_KEY` (générée automatiquement et ajoutée au `.env` si absente). Un ancien fichier en clair est migré automatiquement à la première lecture.
 * **Reverse proxy nginx** : seul nginx est exposé publiquement ; l'app Flask n'est joignable que via le réseau interne Docker. Par défaut en HTTP (`deploy/nginx.http.conf`) ; avec un domaine + certificat, passer sur `deploy/nginx.conf` et `ENFORCE_HTTPS=true` pour forcer HTTPS + HSTS (voir DEPLOYMENT.md).
 * **Anti-brute-force** : le formulaire de connexion est limité à 5 tentatives/minute par IP (Flask-Limiter), les POST d'actualisation à 10/minute.
-* **Messages d'erreur génériques** : les détails d'erreurs (traceback, chemins) ne sont plus renvoyés au navigateur ; ils sont écrits dans `logs/app.log`.
+* **Messages d'erreur génériques** : les détails d'erreurs (traceback, chemins) ne sont jamais renvoyés au navigateur ; ils sont écrits dans `logs/app.log` (`make logs`). L'utilisateur voit une page d'erreur expliquant la marche à suivre, et une page dédiée — et non une erreur — lorsqu'aucune donnée n'a encore été importée.
 * **Journal d'audit** : `logs/audit.log` trace les actions sensibles (connexions, actualisations de données, envois Slack, actions reeval) avec l'IP cliente — jamais les identifiants.
 
 ---
@@ -52,11 +52,20 @@ Application Flask pour suivre la qualité des **masterclasses** et des **animate
 1. **Construire et lancer le conteneur :**
 
    ```bash
-   docker compose up -d --build
+   make up          # équivaut à : docker compose up -d --build
    ```
 
 2. **Accéder à l'application :**
    Rendez-vous sur [http://localhost:80](http://localhost:80)
+
+**Commandes disponibles :**
+
+| Commande     | Effet                                                          |
+| ------------ | -------------------------------------------------------------- |
+| `make up`    | Construit l'image et démarre les conteneurs                     |
+| `make logs`  | Suit les journaux (tracebacks, actualisations, scheduler)       |
+| `make down`  | Arrête les conteneurs                                           |
+| `make clean` | Purge images, volumes et cache Docker inutilisés                |
 
 ### Option B: Sans Docker (Développement local)
 
@@ -108,12 +117,16 @@ En résumé :
 ```
 slack_bot_flask/
 ├─ app/
-│  ├─ __init__.py
+│  ├─ __init__.py                   # create_app, logging, pages d'erreur, scheduler
 │  ├─ routes.py                     # endpoints dont dashboard, leaderboard, etc.
+│  ├─ extensions.py                 # rate limiter partagé
 │  ├─ slack_handler.py              # fonctions post_message et post_thread_message
 │  ├─ static/
 │  └─ templates/
 ├─ backend/
+│  ├─ audit.py                      # journal des actions sensibles
+│  ├─ crypto_utils.py               # chiffrement des identifiants au repos
+│  ├─ nexus_client.py               # client API Nexus & téléchargement des exports
 │  ├─ kpi_animators.py              # fonctions de traitement en logique animateurs
 │  ├─ kpi_comments.py               # logique commentaires
 │  ├─ kpi_masterclass.py            # logique masterclass
@@ -134,7 +147,9 @@ slack_bot_flask/
 │  │  ├─ data_processor.py          # logique de traitement des modules et cohortes
 │  │  ├─ nexus_client.py            # client API Nexus
 │  │  └─ routes.py                  # endpoints reeval (login, dashboard, APIs)
+├─ deploy/                          # configurations nginx (HTTP et HTTPS)
 ├─ config.py                        # variables d'env (bot slack et app)
+├─ Makefile                         # up / logs / down / clean
 ├─ Dockerfile
 ├─ docker-compose.yml
 ├─ DEPLOYMENT.md
@@ -145,5 +160,17 @@ slack_bot_flask/
 
 ## Données
 
-L'application attend un fichier `post_meeting_masterclass.csv` dans `data/uploads/` pour générer les statistiques. Le fichier `merged_processed.csv` est généré automatiquement dans `data/processed/`.
+L'application lit les exports bruts déposés dans `data/uploads/` sous des noms standardisés :
+
+| Fichier                             | Sondage Nexus                  |
+| ----------------------------------- | ------------------------------ |
+| `post_meeting_masterclass.csv`      | Masterclass (FR)               |
+| `post_meeting_masterclass_en.csv`   | Masterclass (EN)               |
+| `techaway_post_tp.csv`              | TechAway post-TP (FR)          |
+| `techaway_post_tp_en.csv`           | TechAway post-TP (EN)          |
+
+Le bouton **Actualiser** et la page `/upload` écrivent tous deux sous ces noms, puis
+retraitent **l'ensemble** des sources vers `data/processed/merged_processed.csv`, le
+fichier unique consommé par les vues. Importer un seul sondage ne supprime donc pas
+les données de l'autre.
 

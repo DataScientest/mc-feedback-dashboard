@@ -286,8 +286,6 @@
     try {
       const resp = await fetch(API_DATA);
       currentData = await resp.json();
-      console.log('Loaded data from API:', currentData);
-      console.log('  modules:', currentData.modules?.length, 'summary:', currentData.summary);
       renderDashboard(currentData);
     } catch (err) {
       console.error('Échec du chargement des données :', err);

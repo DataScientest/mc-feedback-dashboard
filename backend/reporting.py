@@ -7,11 +7,11 @@ from backend.kpi_comments import *
 
 def send_top_animators_message(df):
     top_df = wall_of_fame(df)
-    
+
     if top_df is None or top_df.empty:
         post_message("Aucun animateur au-dessus de 4.8 ce mois-ci 👀", SLACK_CHANNEL)
         return
-    
+
     header_message = "✦•······················•✦ :deal_with_parrot: *Animateurs ≥ 4.8* :deal_with_parrot: ✦•······················•✦"
     post_message(header_message, SLACK_CHANNEL, fallback_text="Top animateurs du mois")
 
@@ -41,7 +41,7 @@ def send_top_animators_message(df):
             info = get_meeting_info(filter_by_date_range(df, start_date=datetime.now() - timedelta(days=30)), meeting_id)
             if info is None:
                 continue
-            
+
             comments_text = ""
             if info["Avis"]:
                 comments_text = "\n".join([f"• _{c}_" for c in info["Avis"]])
@@ -63,11 +63,11 @@ def send_top_animators_message(df):
 
 def send_not_top_animators_message(df):
     not_top_df = wall_of_not_fame(df)
-    
+
     if not_top_df is None or not_top_df.empty:
-        post_message("Aucun animateur sous 4.8 ce mois-ci :sunny:", SLACK_CHANNEL)
+        post_message("Aucun animateur sous 4.0 ce mois-ci :sunny:", SLACK_CHANNEL)
         return
-    
+
     header_message = "✦•······················•✦ 🚨 *Animateurs < 4.0* 🚨 ✦•······················•✦"
     post_message(header_message, SLACK_CHANNEL, fallback_text="Animateurs du mois sous 4")
 
@@ -89,7 +89,7 @@ def send_not_top_animators_message(df):
                 f" - {row['Streak']} mois consécutifs ‼️"
             )
 
-        ts = post_message(base_label, SLACK_CHANNEL, fallback_text="Top animateur")
+        ts = post_message(base_label, SLACK_CHANNEL, fallback_text="Animateur sous 4.0")
 
         # Détails dans le thread (sessions de l’animateur)
         sessions = df[df["Meeting Animator"] == row["Animateur"]]["Meeting ID"].unique()
@@ -97,7 +97,7 @@ def send_not_top_animators_message(df):
             info = get_meeting_info(filter_by_date_range(df, start_date=datetime.now() - timedelta(days=30)), meeting_id)
             if info is None:
                 continue
-            
+
             comments_text = ""
             if info["Avis"]:
                 comments_text = "\n".join([f"• _{c}_" for c in info["Avis"]])

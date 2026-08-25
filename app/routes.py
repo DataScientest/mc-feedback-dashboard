@@ -10,16 +10,18 @@ from flask import (
     Blueprint, current_app, flash, jsonify, redirect, render_template,
     request, session, url_for,
 )
-from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 
-from backend.preprocess import preprocess_data, light_preprocess
+from backend.preprocess import (
+    PROCESSED_PATH, light_preprocess, missing_raw_columns, read_csv_or_none,
+    rebuild_processed_file,
+)
 from backend.kpi_animators import *
 from backend.kpi_masterclass import *
 from backend.kpi_comments import *
 from backend.kpi_techaway import *
 from backend.reporting import *
-from backend.utils import meeting_mapping, pole_mapping, format_paris, read_last_update, write_last_update
+from backend.utils import meeting_mapping, pole_mapping, format_paris, read_last_update
 from backend.nexus_client import load_credentials, save_credentials, get_auth, refresh_data_from_nexus, refresh_techaway_from_nexus
 from backend.audit import audit_log
 from backend.job_state import single_run
@@ -27,12 +29,28 @@ from .extensions import limiter
 
 log = logging.getLogger(__name__)
 
-GENERIC_ERROR = "Une erreur interne est survenue. Consultez les logs du serveur."
+GENERIC_ERROR = "Une erreur interne est survenue."
+
+
+class NoDataError(Exception):
+    """
+    Aucune donnée exploitable à afficher.
+
+    Ce n'est pas une panne : l'utilisateur doit simplement importer des CSV
+    (page /upload) ou lancer une actualisation. Les vues l'attrapent pour
+    afficher no_data.html plutôt qu'une erreur 500.
+    """
+
+
+def _no_data(reason=None):
+    """Page d'accueil « aucune donnée » : explique quoi faire, sans alarmer."""
+    return render_template("no_data.html", reason=str(reason) if reason else None), 200
+
 
 def _internal_error(context: str):
-    """Log the full traceback server-side, show a generic message to the user."""
+    """Log the full traceback server-side, show a friendly page to the user."""
     current_app.logger.exception(context)
-    return GENERIC_ERROR, 500
+    return render_template("error.html", status_code=500, message=GENERIC_ERROR), 500
 
 ALLOWED_EXTENSIONS = {"csv"}
 bp = Blueprint("main", __name__)
@@ -61,12 +79,12 @@ def date_fr(value, with_time=False):
 def require_global_auth():
     # Allow static files and the login route itself
     if request.endpoint and (
-        request.endpoint.startswith('static') or 
-        request.endpoint == 'main.login' or 
+        request.endpoint.startswith('static') or
+        request.endpoint == 'main.login' or
         request.endpoint.endswith('.static')
     ):
         return
-        
+
     creds = load_credentials()
     if not creds:
         if request.path.startswith("/api/") or "/api/" in request.path or request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
@@ -94,19 +112,13 @@ def login():
         else:
             audit_log("login_failed")
             return render_template("login.html", error="Authentication failed. Check your Nexus credentials.")
-            
+
     return render_template("login.html")
 
 
 # File-based state so all Gunicorn worker processes see the same status
 _REFRESH_STATE_FILE = "data/refresh_state.json"
 _REFRESH_STATE_FILE_TA = "data/refresh_state_ta.json"
-
-# Fichiers bruts déposés par Nexus ou par l'upload manuel, groupés par paire FR/EN
-_SOURCE_FILES = [
-    ("data/uploads/post_meeting_masterclass.csv", "data/uploads/post_meeting_masterclass_en.csv"),
-    ("data/uploads/techaway_post_tp.csv", "data/uploads/techaway_post_tp_en.csv"),
-]
 
 
 def _write_refresh_state(status, message="", path=_REFRESH_STATE_FILE):
@@ -116,7 +128,7 @@ def _write_refresh_state(status, message="", path=_REFRESH_STATE_FILE):
 
 def _read_refresh_state(path=_REFRESH_STATE_FILE):
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except (OSError, ValueError):
         return {"status": "idle", "message": ""}
@@ -125,32 +137,9 @@ def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-def _read_csv_or_none(path):
-    try:
-        return pd.read_csv(path)
-    except (OSError, ValueError, pd.errors.ParserError):
-        return None
-
-
 def _reprocess_source_files() -> bool:
-    """
-    Retraite les CSV bruts présents sur le disque vers merged_processed.csv.
-    Retourne False si aucune donnée exploitable n'a été produite.
-    """
-    dfs_processed = []
-    for fr_path, en_path in _SOURCE_FILES:
-        df = preprocess_data(_read_csv_or_none(fr_path), _read_csv_or_none(en_path))
-        if df is not None and not df.empty:
-            dfs_processed.append(df)
-
-    if not dfs_processed:
-        return False
-
-    merged = pd.concat(dfs_processed, ignore_index=True)
-    _processed_path().parent.mkdir(parents=True, exist_ok=True)
-    merged.to_csv(_processed_path(), index=False)
-    write_last_update()
-    return True
+    """Retraite les CSV bruts du disque ; False si rien d'exploitable."""
+    return rebuild_processed_file() is not None
 
 
 def _run_refresh_in_background(fetch, state_file, key, subject):
@@ -239,7 +228,7 @@ def _upload_dir() -> Path:
     return p
 
 def _processed_path() -> Path:
-    return Path("data/processed/merged_processed.csv")
+    return PROCESSED_PATH
 
 
 # Cache du CSV traité, invalidé dès que le fichier change sur le disque.
@@ -248,25 +237,56 @@ def _processed_path() -> Path:
 _processed_cache = {"signature": None, "df": None}
 
 
+# Colonnes produites par preprocess_data() et utilisées par les vues : sans
+# elles, le fichier n'est pas un export traité et aucune page n'est calculable.
+_REQUIRED_COLUMNS = (
+    "Comment", "Meeting Animator", "Meeting Start Date", "Meeting Name",
+    "Meeting ID", "User ID", "Animator Grade", "Content Grade",
+    "Masterclass", "Verticale",
+)
+
+
 def _load_processed_df() -> pd.DataFrame:
     path = _processed_path()
     if not path.exists():
-        raise FileNotFoundError(
-            "Aucun fichier traité. Uploade un ou deux CSV puis traite-les depuis la page d'accueil."
-        )
+        raise NoDataError("Aucun fichier de données n'a encore été importé.")
 
     stat = path.stat()
     signature = (stat.st_mtime_ns, stat.st_size)
     if _processed_cache["signature"] != signature:
-        _processed_cache["df"] = pd.read_csv(path)
+        try:
+            df = pd.read_csv(path)
+        except (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError, OSError) as e:
+            # Fichier vide ou tronqué : typiquement une actualisation interrompue.
+            _processed_cache.update(signature=None, df=None)
+            raise NoDataError("Le fichier de données est vide ou illisible.") from e
+        _processed_cache["df"] = df
         _processed_cache["signature"] = signature
-        log.info("merged_processed.csv rechargé (%d lignes)", len(_processed_cache["df"]))
-    return _processed_cache["df"]
+        log.info("merged_processed.csv rechargé (%d lignes)", len(df))
+
+    df = _processed_cache["df"]
+    if df.empty:
+        raise NoDataError("Le fichier de données ne contient aucune ligne.")
+
+    missing = [c for c in _REQUIRED_COLUMNS if c not in df.columns]
+    if missing:
+        shown = ", ".join(missing[:3]) + ("..." if len(missing) > 3 else "")
+        raise NoDataError(
+            f"Le fichier de données ne contient pas les colonnes attendues ({shown}). "
+            "Il ne s'agit probablement pas d'un export Nexus Insights traité."
+        )
+    return df
 
 
 def _load_df():
     """DataFrame prêt à l'emploi pour les vues (lecture + filtre de langue)."""
-    return light_preprocess(_load_processed_df())
+    df = light_preprocess(_load_processed_df())
+    if df.empty:
+        lang = session.get("lang_filter", "ALL")
+        if lang in ("FR", "EN"):
+            raise NoDataError(f"Aucune donnée pour le filtre de langue « {lang} ».")
+        raise NoDataError("Aucune donnée exploitable après traitement du fichier.")
+    return df
 
 
 def _column(df: pd.DataFrame, candidates, expected: str) -> str:
@@ -311,73 +331,73 @@ def index():
     return redirect(url_for("main.dashboard"))
 
 
+# Champ du formulaire d'upload -> fichier source standardisé. Écrire sous ces
+# noms permet à l'upload manuel et au téléchargement Nexus d'alimenter
+# exactement les mêmes sources, retraitées ensemble.
+_UPLOAD_FIELDS = {
+    "mc_file_fr": "post_meeting_masterclass.csv",
+    "mc_file_en": "post_meeting_masterclass_en.csv",
+    "ta_file_fr": "techaway_post_tp.csv",
+    "ta_file_en": "techaway_post_tp_en.csv",
+}
+
+
 @bp.route("/upload", methods=["GET", "POST"])
 def upload_files():
     if request.method == "POST":
-        # Récupération des 4 fichiers potentiels
-        mc_file_fr = request.files.get("mc_file_fr")
-        mc_file_en = request.files.get("mc_file_en")
-        ta_file_fr = request.files.get("ta_file_fr")
-        ta_file_en = request.files.get("ta_file_en")
+        provided = {
+            field: request.files[field]
+            for field in _UPLOAD_FIELDS
+            if request.files.get(field) and request.files[field].filename
+        }
 
-        # Au moins un fichier requis
-        if not any([mc_file_fr, mc_file_en, ta_file_fr, ta_file_en]):
+        if not provided:
             flash("Veuillez uploader au moins un fichier (FR ou EN) dans l'une des sections.")
             return redirect(request.url)
 
         upload_dir = _upload_dir()
-
-        def read_csv_if_ok(file_storage):
-            """Sauvegarde sécurisée + lecture CSV si fourni & extension OK, sinon None."""
-            if not file_storage:
-                return None
+        saved = []
+        for field, file_storage in provided.items():
             if not allowed_file(file_storage.filename or ""):
-                return None
-            fname = secure_filename(file_storage.filename or "")
-            if not fname:
-                return None
-            save_path = upload_dir / fname
-            file_storage.save(str(save_path))
-            return pd.read_csv(save_path)
+                flash(f"« {file_storage.filename} » a été ignoré : seuls les fichiers .csv sont acceptés.")
+                continue
 
-        # Lecture des CSV (chacun peut être None)
-        df_mc_fr = read_csv_if_ok(mc_file_fr)
-        df_mc_en = read_csv_if_ok(mc_file_en)
-        df_ta_fr = read_csv_if_ok(ta_file_fr)
-        df_ta_en = read_csv_if_ok(ta_file_en)
+            # Écriture temporaire puis validation : un fichier hors format ne
+            # doit pas remplacer la source précédente, qui elle est exploitable.
+            destination = upload_dir / _UPLOAD_FIELDS[field]
+            tmp_path = upload_dir / f"{_UPLOAD_FIELDS[field]}.part"
+            file_storage.save(str(tmp_path))
 
-        # Rien de valide ?
-        if not any([df_mc_fr is not None, df_mc_en is not None, df_ta_fr is not None, df_ta_en is not None]):
+            df = read_csv_or_none(tmp_path)
+            if df is None:
+                tmp_path.unlink(missing_ok=True)
+                flash(f"« {file_storage.filename} » a été ignoré : CSV illisible.")
+                continue
+
+            missing = missing_raw_columns(df)
+            if missing:
+                tmp_path.unlink(missing_ok=True)
+                shown = ", ".join(missing[:3]) + ("..." if len(missing) > 3 else "")
+                flash(
+                    f"« {file_storage.filename} » a été ignoré : ce n'est pas un export "
+                    f"Nexus Insights (colonnes manquantes : {shown})."
+                )
+                continue
+
+            os.replace(tmp_path, destination)
+            saved.append(destination.name)
+
+        if not saved:
             flash("Aucun fichier valide (.csv) n'a été détecté.")
             return redirect(request.url)
 
-        # --- Traitement : même logique pour chaque paire (FR/EN) ---
-        dfs_processed = []
-
-        # Paire Masterclass
-        if (df_mc_fr is not None) or (df_mc_en is not None):
-            df_proc_mc = preprocess_data(df_mc_fr, df_mc_en)
-            if df_proc_mc is not None and not df_proc_mc.empty:
-                dfs_processed.append(df_proc_mc)
-
-        # Paire TechAway
-        if (df_ta_fr is not None) or (df_ta_en is not None):
-            df_proc_ta = preprocess_data(df_ta_fr, df_ta_en)
-            if df_proc_ta is not None and not df_proc_ta.empty:
-                dfs_processed.append(df_proc_ta)
-
-        if not dfs_processed:
+        # Retraitement de TOUTES les sources présentes : uploader la seule paire
+        # Masterclass ne doit pas faire disparaître les données TechAway.
+        if rebuild_processed_file() is None:
             flash("Les fichiers fournis n'ont produit aucune donnée après traitement.")
             return redirect(request.url)
 
-        # Concat finale (empilement vertical)
-        df_processed = pd.concat(dfs_processed, ignore_index=True)
-
-        # Sauvegarde unique vers le chemin déjà utilisé par l'app
-        df_processed.to_csv(_processed_path(), index=False)
-        write_last_update()
-
-        audit_log("files_uploaded")
+        audit_log("files_uploaded", ", ".join(saved))
         flash("Fichiers uploadés et traités avec succès.")
         return redirect(url_for("main.dashboard"))
 
@@ -404,8 +424,8 @@ def dashboard():
             negative_feedback=negative_feedback,
             negative_message=negative_message,
         )
-    except FileNotFoundError:
-        return render_template("no_data.html")
+    except NoDataError as e:
+        return _no_data(e)
     except Exception:
         return _internal_error(f"Unhandled error on {request.path}")
 
@@ -454,8 +474,8 @@ def animateurs():
             animateurs_by_role = {"Autres": sorted(items, key=lambda x: x["name"].lower())}
 
         return render_template("animateurs.html", animateurs_by_role=animateurs_by_role, q=request.args.get("q", ""))
-    except FileNotFoundError:
-        return render_template("no_data.html")
+    except NoDataError as e:
+        return _no_data(e)
     except Exception:
         return _internal_error(f"Unhandled error on {request.path}")
 
@@ -504,8 +524,8 @@ def animateur_detail(animateur: str):
             comments=comments_df.to_dict("records"),
         )
 
-    except FileNotFoundError:
-        return render_template("no_data.html")
+    except NoDataError as e:
+        return _no_data(e)
     except Exception:
         return _internal_error(f"Unhandled error on {request.path}")
 
@@ -571,8 +591,8 @@ def masterclasses():
             pole_stats=pole_stats,
             pole_colors=pole_colors,
         )
-    except FileNotFoundError:
-        return render_template("no_data.html")
+    except NoDataError as e:
+        return _no_data(e)
     except Exception:
         return _internal_error(f"Unhandled error on {request.path}")
 
@@ -615,8 +635,8 @@ def masterclass_detail(masterclass: str):
             comments=comments_df.to_dict("records"),
         )
 
-    except FileNotFoundError:
-        return render_template("no_data.html")
+    except NoDataError as e:
+        return _no_data(e)
     except Exception:
         return _internal_error(f"Unhandled error on {request.path}")
 
@@ -733,8 +753,8 @@ def leaderboard():
             active_only=active_only,
             active_window_days=ACTIVE_WINDOW_DAYS,
         )
-    except FileNotFoundError:
-        return render_template("no_data.html")
+    except NoDataError as e:
+        return _no_data(e)
     except Exception:
         return _internal_error(f"Unhandled error on {request.path}")
 
@@ -777,8 +797,8 @@ def slack_bot():
             return redirect(url_for("main.slack_bot"))
 
         return render_template("slack_bot.html")
-    except FileNotFoundError:
-        return render_template("no_data.html")
+    except NoDataError as e:
+        return _no_data(e)
     except Exception:
         return _internal_error(f"Unhandled error on {request.path}")
 
@@ -888,8 +908,8 @@ def techaway():
             tp_meta=tp_meta,
         )
 
-    except FileNotFoundError:
-        return render_template("no_data.html")
+    except NoDataError as e:
+        return _no_data(e)
     except Exception:
         return _internal_error(f"Unhandled error on {request.path}")
 
@@ -930,8 +950,8 @@ def commentaires():
             days=days,
         )
 
-    except FileNotFoundError:
-        return render_template("no_data.html")
+    except NoDataError as e:
+        return _no_data(e)
     except Exception:
         return _internal_error(f"Unhandled error on {request.path}")
 

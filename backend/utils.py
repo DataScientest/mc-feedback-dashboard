@@ -20,13 +20,13 @@ LAST_UPDATE_FILE = Path("data/last_upload.txt")
 _LEGACY_UPDATE_FORMAT = "%d/%m/%Y à %H:%M"
 
 
-with open(MAPPING_DIR / "meeting_mapping.json", "r", encoding="utf-8") as f:
+with open(MAPPING_DIR / "meeting_mapping.json", encoding="utf-8") as f:
     meeting_mapping = json.load(f)
 
-with open(MAPPING_DIR / "role_mapping.json", "r", encoding="utf-8") as f:
+with open(MAPPING_DIR / "role_mapping.json", encoding="utf-8") as f:
     role_mapping = json.load(f)
 
-with open(MAPPING_DIR / "pole_mapping.json", "r", encoding="utf-8") as f:
+with open(MAPPING_DIR / "pole_mapping.json", encoding="utf-8") as f:
     pole_mapping = json.load(f)
 
 
@@ -130,13 +130,13 @@ def get_verticale_techaway(masterclass):
     for option in options:
         if option in masterclass:
             return option
-    
+
     if "PROGRAMMING" in masterclass:
         return "PROGRAMING"
-    
+
     if "Examen blanc" in masterclass:
         return "Examen blanc"
-    
+
     else:
         return "Not TechAway"
 
@@ -268,23 +268,23 @@ def get_meeting_info(df, meeting_id):
     meeting_df = df[df["Meeting ID"] == meeting_id].copy()
     if meeting_df.empty:
         return None
-    
+
     # Informations générales
     meeting_date = meeting_df["Meeting Start Date"].iloc[0]
     masterclass = meeting_df["Masterclass"].iloc[0]
     animator = meeting_df["Meeting Animator"].iloc[0]
     animator_label = format_animator_label(animator)
-    
+
     # Avis (commentaires > 3 mots)
     comments = [
         c for c in meeting_df["Comment"].dropna().tolist()
         if isinstance(c, str) and len(c.strip().split()) > 3
     ]
-    
+
     # Notes
     avg_grade = meeting_df["Animator Grade"].mean().round(2)
     animator_grades = meeting_df["Animator Grade"].dropna().tolist()
-    
+
     return {
         "Meeting ID": meeting_id,
         "Date": meeting_date,

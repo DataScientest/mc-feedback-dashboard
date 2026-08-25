@@ -3,33 +3,80 @@
 {% block title %}Aucune donnée | Dashboard Masterclass{% endblock %}
 
 {% block content %}
-{{ ui.page_header('Aucune donnée disponible',
-                  "Aucun fichier traité n'est disponible pour afficher les statistiques.") }}
+{{ ui.page_header('Aucune donnée à afficher',
+                  "Ce n'est pas une erreur : il n'y a simplement encore aucun fichier exploitable à traiter.") }}
+
+{% if reason %}
+  <div class="alert alert-warning" role="alert">
+    <strong>Détail :</strong> {{ reason }}
+  </div>
+{% endif %}
 
 <div class="row g-4">
-  <div class="col-md-6">
-    <div class="card h-100 border-primary">
+  <div class="col-lg-7">
+    <div class="card h-100">
       <div class="card-header">
-        <h2 class="h6 m-0 text-primary">Actualisation automatique</h2>
+        <h2 class="h6 m-0">Marche à suivre</h2>
       </div>
-      <div class="card-body d-flex flex-column justify-content-between gap-3">
-        <p class="text-muted mb-0">Récupère et traite les données depuis l'API Nexus.</p>
-        <button class="btn btn-primary w-100" onclick="initRefreshData()">Récupérer les données</button>
+      <div class="card-body">
+        <p class="text-muted">
+          Deux façons d'alimenter le dashboard. Essayez d'abord l'actualisation
+          automatique ; l'upload manuel est la solution de secours.
+        </p>
+
+        <h3 class="h6 mb-2">Option 1 — Actualisation automatique (recommandé)</h3>
+        <ol class="text-muted small">
+          <li>Cliquez sur <strong>Actualiser</strong> dans la barre de navigation.</li>
+          <li>Saisissez vos identifiants Nexus si la fenêtre les demande.</li>
+          <li>Patientez : le téléchargement et le traitement prennent une minute environ.</li>
+        </ol>
+
+        <h3 class="h6 mb-2 mt-4">Option 2 — Upload manuel des CSV</h3>
+        <ol class="text-muted small mb-0">
+          <li>
+            Dans Nexus, ouvrez <span class="font-monospace">Insights &gt; Surveys</span> et exportez
+            <span class="font-monospace">post_meeting_masterclass</span> (Masterclass) et/ou
+            <span class="font-monospace">techaway_post_tp</span> (TechAway), en FR et en EN.
+          </li>
+          <li>
+            Allez sur la <a href="{{ url_for('main.upload_files') }}">page d'upload</a> et déposez
+            les fichiers dans les champs correspondants.
+          </li>
+          <li>Cliquez sur <strong>Uploader</strong> : les fichiers sont traités immédiatement.</li>
+          <li>Revenez sur le dashboard, les statistiques s'affichent.</li>
+        </ol>
       </div>
     </div>
   </div>
 
-  <div class="col-md-6">
-    <div class="card h-100">
-      <div class="card-header">
-        <h2 class="h6 m-0">Upload manuel</h2>
+  <div class="col-lg-5">
+    <div class="d-flex flex-column gap-4 h-100">
+      <div class="card border-primary">
+        <div class="card-header">
+          <h2 class="h6 m-0 text-primary">Actualisation automatique</h2>
+        </div>
+        <div class="card-body d-flex flex-column justify-content-between gap-3">
+          <p class="text-muted mb-0 small">Récupère et traite les données depuis l'API Nexus.</p>
+          <button class="btn btn-primary w-100" onclick="initRefreshData()">Récupérer les données</button>
+        </div>
       </div>
-      <div class="card-body d-flex flex-column justify-content-between gap-3">
-        <p class="text-muted mb-0">Importez vos propres fichiers CSV exportés depuis Nexus Insights.</p>
-        <a href="{{ url_for('main.upload_files') }}" class="btn btn-outline-secondary w-100">
-          Aller à la page d'upload
-        </a>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="h6 m-0">Upload manuel</h2>
+        </div>
+        <div class="card-body d-flex flex-column justify-content-between gap-3">
+          <p class="text-muted mb-0 small">Importez vos propres fichiers CSV exportés depuis Nexus Insights.</p>
+          <a href="{{ url_for('main.upload_files') }}" class="btn btn-outline-secondary w-100">
+            Aller à la page d'upload
+          </a>
+        </div>
       </div>
+
+      <p class="text-muted small mb-0">
+        Un souci persiste après l'import ? Le détail technique est dans les journaux
+        du serveur (<code>make logs</code> ou <code>logs/app.log</code>).
+      </p>
     </div>
   </div>
 </div>

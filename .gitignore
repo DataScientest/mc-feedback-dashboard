@@ -6,11 +6,6 @@ __pycache__/
 # C extensions
 *.so
 
-# Personal files
-merged_processed.csv
-post_meeting_masterclass.csv
-post_meeting_masterclass_1.csv
-
 # Distribution / packaging
 .Python
 build/
@@ -214,5 +209,12 @@ __marimo__/
 # App runtime secrets, état des jobs & logs
 data/credentials.json
 data/last_weekly_report.txt
+data/last_upload.txt
+data/refresh_state*.json
 data/*.lock
 logs/
+
+# Données d'exécution : exports Nexus bruts et fichier traité. Ils contiennent
+# des données personnelles (noms, avis) et ne doivent jamais être versionnés.
+data/uploads/
+data/processed/

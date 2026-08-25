@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+{% set code = status_code | default(500) %}
+{% set heading = title | default("Une erreur est survenue") %}
+{% block title %}{{ heading }} | Dashboard Masterclass{% endblock %}
+
+{% block content %}
+{{ ui.page_header(heading,
+                  message | default("Le serveur n'a pas pu afficher cette page.")) }}
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <h2 class="h6 m-0">Que faire maintenant ?</h2>
+        <span class="badge text-bg-secondary">Erreur {{ code }}</span>
+      </div>
+      <div class="card-body">
+        <p class="text-muted">
+          Rien n'est perdu : les données déjà importées restent sur le serveur.
+          Suivez ces étapes dans l'ordre, la première suffit dans la plupart des cas.
+        </p>
+
+        <ol class="mb-0">
+          <li class="mb-3">
+            <strong>Rechargez la page.</strong>
+            <div class="text-muted small">
+              Une erreur passagère (actualisation en cours, fichier en cours d'écriture)
+              disparaît au rechargement.
+            </div>
+          </li>
+          <li class="mb-3">
+            <strong>Vérifiez que des données sont bien importées.</strong>
+            <div class="text-muted small">
+              Sans fichier CSV traité, aucune statistique ne peut être calculée.
+              Importez vos exports Nexus depuis la
+              <a href="{{ url_for('main.upload_files') }}">page d'upload</a>.
+            </div>
+          </li>
+          <li class="mb-3">
+            <strong>Relancez une actualisation.</strong>
+            <div class="text-muted small">
+              Le bouton <em>Actualiser</em> de la barre de navigation retélécharge
+              les données depuis Nexus et les retraite.
+            </div>
+          </li>
+          <li class="mb-0">
+            <strong>Consultez les journaux du serveur.</strong>
+            <div class="text-muted small">
+              Si l'erreur persiste, le détail technique s'y trouve :
+              <code>make logs</code> sur la machine hôte, ou le fichier
+              <code>logs/app.log</code>.
+            </div>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card h-100 border-primary">
+      <div class="card-header">
+        <h2 class="h6 m-0 text-primary">Actions rapides</h2>
+      </div>
+      <div class="card-body d-flex flex-column gap-2">
+        <button class="btn btn-primary" onclick="location.reload()">Recharger la page</button>
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">
+          Retour au dashboard
+        </a>
+        <a href="{{ url_for('main.upload_files') }}" class="btn btn-outline-secondary">
+          Importer des fichiers CSV
+        </a>
+
+        {% if details %}
+          <hr class="my-2">
+          <details class="small">
+            <summary class="text-muted">Détail technique</summary>
+            <pre class="mt-2 mb-0 small text-muted text-wrap">{{ details }}</pre>
+          </details>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,6 +1,10 @@
+import logging
+
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from config import SLACK_TOKEN
+
+log = logging.getLogger(__name__)
 
 
 client = WebClient(token=SLACK_TOKEN)
@@ -15,7 +19,7 @@ def post_message(text, channel, fallback_text="Notification"):
         )
         return response["ts"]
     except SlackApiError as e:
-        print(f"[ERROR] Failed to post message: {e.response['error']}")
+        log.error("Échec de l'envoi du message Slack : %s", e.response["error"])
         raise
 
 def post_thread_message(text, channel, thread_ts):
@@ -26,5 +30,5 @@ def post_thread_message(text, channel, thread_ts):
             text=text
         )
     except SlackApiError as e:
-        print(f"[ERROR] Failed to post thread message: {e.response['error']}")
+        log.error("Échec de l'envoi du message dans le fil Slack : %s", e.response["error"])
         raise

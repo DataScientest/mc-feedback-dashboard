@@ -8,6 +8,7 @@ from logging.handlers import RotatingFileHandler
 import os
 import socket
 import threading
+from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .extensions import limiter
@@ -41,6 +42,13 @@ def _setup_logging():
     app_handler.setLevel(logging.INFO)
     root = logging.getLogger()
     root.addHandler(app_handler)
+
+    # Sans ce handler, les tracebacks n'iraient que dans logs/app.log et
+    # `make logs` (docker compose logs) n'afficherait rien d'utile.
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(fmt)
+    console_handler.setLevel(logging.INFO)
+    root.addHandler(console_handler)
     if root.level > logging.INFO or root.level == logging.NOTSET:
         root.setLevel(logging.INFO)
 
@@ -75,6 +83,58 @@ def create_app():
                 error="Trop de tentatives de connexion. Réessayez dans une minute.",
             ), 429
         return jsonify({"status": "error", "message": "Trop de requêtes. Réessayez plus tard."}), 429
+
+    # Endpoints interrogés en fetch() par le front : ils doivent répondre en
+    # JSON même en erreur, sinon le JSON.parse() côté navigateur échoue.
+    JSON_ENDPOINTS = {
+        "main.refresh_data", "main.refresh_status",
+        "main.refresh_techaway", "main.refresh_techaway_status",
+    }
+
+    def _wants_json():
+        """Les appels fetch() du front attendent du JSON, pas une page HTML."""
+        return (
+            "/api/" in request.path
+            or request.endpoint in JSON_ENDPOINTS
+            or request.is_json
+            or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        )
+
+    def _error_page(code, title, message):
+        """Page d'erreur avec la navbar et la marche à suivre (cf. error.html)."""
+        if _wants_json():
+            return jsonify({"status": "error", "message": message}), code
+        try:
+            return render_template(
+                "error.html", status_code=code, title=title, message=message
+            ), code
+        except Exception:
+            # Dernier recours : ne jamais masquer l'erreur d'origine par une
+            # erreur de rendu du template.
+            app.logger.exception("Rendu de error.html impossible")
+            return f"{message} (erreur {code})", code
+
+    @app.errorhandler(404)
+    def _not_found(e):
+        return _error_page(
+            404,
+            "Page introuvable",
+            "Cette adresse ne correspond à aucune page du dashboard.",
+        )
+
+    @app.errorhandler(500)
+    @app.errorhandler(Exception)
+    def _unhandled(e):
+        # Laisser passer les erreurs HTTP explicites (403, 405...) vers leur
+        # propre handler plutôt que de toutes les afficher en 500.
+        if isinstance(e, HTTPException) and e.code != 500:
+            return e
+        app.logger.exception("Unhandled error on %s", request.path)
+        return _error_page(
+            500,
+            "Une erreur est survenue",
+            "Le serveur n'a pas pu afficher cette page.",
+        )
 
     # HTTPS enforcement - enable with ENFORCE_HTTPS=true in production
     # (behind the nginx reverse proxy). Off by default for local dev.

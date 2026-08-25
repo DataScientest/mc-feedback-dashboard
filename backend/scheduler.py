@@ -6,10 +6,9 @@
 # jamais envoyer deux fois le même récap.
 
 import logging
-import os
-import pandas as pd
+
 from backend.utils import *
-from backend.preprocess import preprocess_data, light_preprocess
+from backend.preprocess import light_preprocess, rebuild_processed_file
 from backend.nexus_client import refresh_data_from_nexus
 from backend.reporting import send_bad_sessions
 from backend.job_state import (
@@ -54,16 +53,11 @@ def _run_weekly_report():
         return False
 
     # 2. Traitement des données
-    df_fr_raw = _read_csv_or_none("data/uploads/post_meeting_masterclass.csv")
-    df_en_raw = _read_csv_or_none("data/uploads/post_meeting_masterclass_en.csv")
-
-    if df_fr_raw is None and df_en_raw is None:
-        log.error("Job hebdo interrompu : aucun CSV masterclass à traiter.")
-        return False
-
     log.info("Job hebdo : traitement des données téléchargées...")
     try:
-        df = preprocess_data(df_fr_raw, df_en_raw)
+        # Retraite toutes les sources du disque, pas seulement les masterclass :
+        # sinon le récap hebdomadaire effacerait les données TechAway.
+        df = rebuild_processed_file()
     except Exception:
         log.exception("Job hebdo interrompu : erreur pendant le prétraitement.")
         return False
@@ -71,11 +65,6 @@ def _run_weekly_report():
     if df is None or df.empty:
         log.error("Job hebdo interrompu : aucune donnée exploitable après traitement.")
         return False
-
-    os.makedirs("data/processed", exist_ok=True)
-    # On écrase pour conserver le dernier historique complet
-    df.to_csv("data/processed/merged_processed.csv", index=False)
-    write_last_update()
 
     # 3. Envoi du récap des sessions mal notées
     log.info("Job hebdo : envoi du récap des commentaires négatifs sur Slack...")
@@ -90,13 +79,6 @@ def _run_weekly_report():
     mark_weekly_report_sent()
     log.info("Job hebdo terminé avec succès.")
     return True
-
-
-def _read_csv_or_none(path):
-    try:
-        return pd.read_csv(path)
-    except (OSError, ValueError, pd.errors.ParserError):
-        return None
 
 
 def main():

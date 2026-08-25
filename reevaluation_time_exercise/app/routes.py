@@ -3,24 +3,20 @@ Flask routes - login, dashboard, and API endpoints for adding
 users/cohorts and fetching aggregated data.
 """
 
-import time
-import json
 import logging
 import threading
-
-log = logging.getLogger(__name__)
+import time
 
 from flask import (
     Blueprint,
+    jsonify,
+    redirect,
     render_template,
     request,
-    redirect,
     url_for,
-    session,
-    jsonify,
-    Response,
-    stream_with_context,
 )
+
+log = logging.getLogger(__name__)
 
 from .nexus_client import fetch_user_lessons, fetch_cohort_users
 from .data_processor import DataPool, extract_modules_from_lessons
@@ -244,8 +240,8 @@ def _fetch_users(user_ids: set, token: str):
                 modules_data = extract_modules_from_lessons(lessons)
                 _data_pool.add_user_data(uid, modules_data)
         except Exception:
-            # Skip individual user failures silently
-            pass
+            # Un utilisateur en échec ne doit pas interrompre le lot entier.
+            log.warning("Récupération des leçons impossible pour l'utilisateur %s", uid, exc_info=True)
 
         # Small delay to be gentle on the API
         time.sleep(0.2)

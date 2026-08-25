@@ -209,12 +209,12 @@ def get_sessions_animateur(df, animateur, days=30):
 def get_last_feedback(df, animateur):
     df_30j = filter_by_date_range(df, start_date=datetime.now() - timedelta(days=30))
     df_30j = df_30j[df_30j["Meeting Animator"] == animateur]
-    
+
     feedback = df_30j[["User ID", "User Fullname", "Comment", "Meeting ID", "Animator Grade", "Meeting Animator", "Meeting Start Date", "Masterclass"]]
-    
+
     if feedback.empty or feedback is None:
         return pd.DataFrame([])
-    
+
     return feedback
 
 
