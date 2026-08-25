@@ -17,7 +17,7 @@ slack_sdk==3.36.0
 # Planification, configuration, chiffrement des identifiants
 APScheduler==3.10.4
 python-dotenv==1.1.1
-cryptography==43.0.3
+cryptography==50.0.0
 
 # Base de fuseaux horaires (Europe/Paris) : absente des images Python slim
 tzdata==2025.2
