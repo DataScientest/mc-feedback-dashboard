@@ -2,7 +2,7 @@
 # (numpy, pytz, Jinja2, itsdangerous...) sont résolues par pip.
 
 # Web
-Flask==3.1.2
+Flask==3.1.3
 Werkzeug==3.1.3
 Flask-Limiter==4.1.1
 gunicorn==23.0.0
