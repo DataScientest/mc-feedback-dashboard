@@ -11,7 +11,7 @@ gunicorn==23.0.0
 pandas==2.3.2
 
 # Intégrations externes
-requests==2.32.3
+requests==2.33.0
 slack_sdk==3.36.0
 
 # Planification, configuration, chiffrement des identifiants
