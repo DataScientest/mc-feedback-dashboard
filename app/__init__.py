@@ -3,6 +3,7 @@ import config
 from apscheduler.schedulers.background import BackgroundScheduler
 from backend.scheduler import job_generate_weekly_report
 from backend.job_state import bootstrap_weekly_marker, weekly_report_due
+from backend.visits import VISITS_LOG, record_visit
 import logging
 from logging.handlers import RotatingFileHandler
 import os
@@ -61,6 +62,16 @@ def _setup_logging():
     audit.setLevel(logging.INFO)
     audit.propagate = False
 
+    # Pages vues (lu par `make visits`). Pas de rotation : le classement doit
+    # couvrir tout l'historique, et deux workers Gunicorn qui feraient tourner
+    # le même fichier se marcheraient dessus. Une visite pèse ~150 octets.
+    visits_handler = logging.FileHandler(VISITS_LOG, encoding="utf-8")
+    visits_handler.setFormatter(logging.Formatter("%(message)s"))
+    visits = logging.getLogger("visits")
+    visits.addHandler(visits_handler)
+    visits.setLevel(logging.INFO)
+    visits.propagate = False
+
 
 def create_app():
     app = Flask(__name__)
@@ -74,6 +85,7 @@ def create_app():
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     limiter.init_app(app)
+    app.after_request(record_visit)
 
     @app.errorhandler(429)
     def _too_many_requests(e):

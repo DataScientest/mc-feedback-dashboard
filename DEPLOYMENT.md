@@ -193,6 +193,29 @@ To update the bot with the latest code from GitHub:
 - **Port Issues**: Ensure the Security Group for your EC2 instance allows Inbound traffic on Ports 80 **and 443** (nginx terminates TLS and proxies to the app on the internal Docker network).
 - **Logs**: application logs are persisted on the host in `logs/app.log`, and an audit trail of sensitive actions (logins, data refreshes, Slack sends) in `logs/audit.log`.
 
+### 502 Bad Gateway after a reboot
+
+Symptom: every page returns `502 Bad Gateway` and the response header says
+`Server: nginx/1.24.0 (Ubuntu)` (not `nginx/1.27.x`), `docker compose ps -a`
+shows the `nginx` container stuck in `Created`, and `sudo ss -lpnt | grep :80`
+shows a host `nginx` process with a small PID.
+
+Cause: a host-level nginx (`apt` package) is installed and enabled, so on
+reboot systemd starts it before Docker and it takes port 80. The compose
+nginx container then cannot bind `80:80` and never starts (the `restart`
+policy does not apply to a container that never ran).
+
+Fix and prevention:
+
+```bash
+sudo systemctl disable --now nginx     # stop it and keep it off at boot
+docker compose up -d                   # start the compose nginx container
+docker compose ps                      # both services must be "Up"
+```
+
+Optionally remove the host nginx entirely (the stack does not use it):
+`sudo apt-get purge -y nginx nginx-common && sudo apt-get autoremove -y`.
+
 ### "Address already in use" Error
 
 If you see `failed to bind host port ... 0.0.0.0:80 ... address already in use`, it means another program is using port 80 (e.g., Nginx, Apache, or an old version of your bot).
